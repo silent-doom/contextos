@@ -53,10 +53,12 @@ class RoleInput(Input):
     role: Literal['pm', 'architect', 'developer', 'qa', 'security']
 
 
-def create_app(store=None, ai=None):
+def create_app(store=None, ai=None, markdown_storage=None):
     app = FastAPI(title='ContextOS', docs_url='/api/docs', redoc_url=None)
     app.state.store = store or make_store()
     app.state.ai = ai or AI()
+    from backend.data.storage import MarkdownStorage
+    app.state.markdown_storage = markdown_storage or MarkdownStorage(ROOT / 'storage')
     auth_mode = os.getenv('AUTH_MODE', 'demo')
     if auth_mode not in ('demo', 'firebase'):
         raise RuntimeError('AUTH_MODE must be demo or firebase.')
@@ -285,7 +287,7 @@ def create_app(store=None, ai=None):
         return app.state.store.mutate(wid, record)
 
     from backend.api.main import create_router
-    app.include_router(create_router(workspace), prefix='/api/context', tags=['Shared knowledge'])
+    app.include_router(create_router(workspace, demo_mode=auth_mode == 'demo'), prefix='/api/context', tags=['Shared knowledge'])
 
     @app.get('/favicon.ico', include_in_schema=False)
     def favicon():

@@ -42,6 +42,51 @@ test('an expired context request returns control to the existing sign-in flow', 
   assert.equal(root.textContent,'');
 });
 
+test('the sidebar selection determines the project and the knowledge page has no project dropdown',async()=>{
+  const list=[{id:'first',name:'First project'},{id:'second',name:'Second project'}],selected=[];
+  const root=element(),sandbox={window:{contextMap},fetch:async url=>{
+    if(url.endsWith('/template'))return response({});
+    if(url.endsWith('/projects?include_archived=true'))return response(list);
+    if(url.endsWith('/proposals'))return response([]);
+    const item=list.find(project=>url.endsWith('/'+project.id));
+    assert.ok(item,'Only the selected project should be requested');
+    return response({project:item,contexts:[],relationships:[]});
+  }};
+  vm.runInNewContext(source,sandbox);
+  await sandbox.window.contextPages.mount(root,null,null,'second',(_list,id)=>selected.push(id));
+  assert.deepEqual(selected,['second']);
+  assert.match(root.innerHTML,/Second project/);
+  assert.doesNotMatch(root.innerHTML,/id="context-project-select"/);
+});
+
+const appSource=fs.readFileSync(path.resolve(__dirname,'../../../web/app.js'),'utf8').replace(/\nbootstrapIdentity\(\);\s*$/,'');
+function sidebarHarness(){
+  const elements=new Map(),saved=new Map();
+  const get=selector=>{
+    if(!elements.has(selector))elements.set(selector,{innerHTML:'',textContent:'',disabled:false,addEventListener(){},close(){},replaceChildren(){this.innerHTML='';}});
+    return elements.get(selector);
+  };
+  const sandbox={window:{addEventListener(){},contextPages:{clear(){}}},location:{hash:'',pathname:'/knowledge'},
+    document:{querySelector:get,addEventListener(){}},
+    sessionStorage:{getItem:key=>saved.get(key),setItem:(key,value)=>saved.set(key,value),removeItem:key=>saved.delete(key)}};
+  vm.runInNewContext(appSource,sandbox);
+  return {get,saved,update:sandbox.updateProjectMenu,clear:sandbox.clearProtectedView};
+}
+
+test('sidebar keeps one active project, preserves selection and clears names on sign-out',()=>{
+  const h=sidebarHarness(),list=[{id:'one',name:'Checkout Reliability',project_type:'Software'},{id:'two',name:'Research Assistant',project_type:'Research'}];
+  h.update(list,'two');
+  assert.equal(h.saved.get('contextos-project'),'two');
+  assert.equal(h.get('#workspace-project-type').textContent,'Research');
+  assert.equal((h.get('#workspace-project-select').innerHTML.match(/selected/g)||[]).length,1);
+  h.update(list);
+  assert.equal(h.saved.get('contextos-project'),'two');
+  h.clear();
+  assert.equal(h.saved.has('contextos-project'),false);
+  assert.equal(h.get('#workspace-project-select').disabled,true);
+  assert.doesNotMatch(h.get('#workspace-project-select').innerHTML,/Research Assistant|Checkout Reliability/);
+});
+
 const card = id => ({id,name:`Context ${id}`,title:`Context ${id}`,domain:'Requirements',revision:1,version:1,filename:`internal-${id}.md`,owner_type:'pm',status:'up_to_date',relationships:[],content:`Body ${id}`,owner:'pm',body:`Body ${id}`,dependencies:[]});
 const link = (source_id,target_id,kind='depends_on') => ({source_id,target_id,kind});
 
@@ -85,6 +130,16 @@ test('map cards expose keyboard buttons and escape full user-supplied titles', (
   assert.match(html,/cp-node-consumer/);
 });
 
+test('every map card has a freshness tag that remains separate from selection styling',()=>{
+  const html=contextMap.render([card('A'),{...card('B'),status:'stale',requires_review:true,status_label:'Requires review'}],[link('B','A')],'B');
+  assert.equal((html.match(/class="cp-node-freshness /g)||[]).length,2);
+  assert.match(html,/cp-freshness-current/);
+  assert.match(html,/cp-freshness-review/);
+  assert.match(html,/aria-label="Open Context B, Requirements, version 1, Requires review"/);
+  assert.match(html,/class="cp-node-body"/);
+  assert.doesNotMatch(html,/Requirements · stale/);
+});
+
 test('rapid selection keeps the last selected page when an earlier request finishes late', async () => {
   let releaseB,releaseC;
   const handlers={},root={...element(),addEventListener:(name,handler)=>{handlers[name]=handler;}};
@@ -114,8 +169,8 @@ test('rapid selection keeps the last selected page when an earlier request finis
   assert.doesNotMatch(root.innerHTML,/<h2[^>]*>Context B<\/h2>/);
 });
 
-function workspaceHarness() {
-  const handlers={}, requests=[], documents=['A','B'].map(card);
+function workspaceHarness(documents=['A','B'].map(card)) {
+  const handlers={}, requests=[];
   const root={...element(),addEventListener:(name,handler)=>{handlers[name]=handler;}};
   let pending;
   const sandbox={window:{contextMap},fetch:async url=>{
@@ -125,10 +180,10 @@ function workspaceHarness() {
     if(url.endsWith('/projects/current'))return response({project:{id:'current',name:'Test project'},contexts:documents,relationships:[link('B','A')]});
     if(url.endsWith('/proposals'))return response([]);
     if(url.endsWith('/sections'))return response({sections:[]});
-    if(url.endsWith('/status'))return response({status:'up_to_date',pending_proposals:0});
+    if(url.endsWith('/status'))return response({...documents.find(doc=>url.includes('/contexts/'+doc.id+'/')),pending_proposals:0});
     if(url.endsWith('/versions'))return response([]);
     if(pending)return new Promise(resolve=>{pending.release=resolve;});
-    return response(card(url.endsWith('/B')?'B':'A'));
+    return response(documents.find(doc=>url.endsWith('/'+doc.id)));
   }};
   vm.runInNewContext(source,sandbox);
   const click=(cpAction,extra={})=>handlers.click({target:{closest:()=>({dataset:{cpAction,...extra}})}});
@@ -136,11 +191,12 @@ function workspaceHarness() {
   return {root,requests,mount:()=>sandbox.window.contextPages.mount(root),click,flush,defer:()=>{pending={};return pending;}};
 }
 
-test('knowledge opens on the map and selection focuses content with supporting metadata',async()=>{
+test('knowledge keeps selected content above the map with supporting metadata',async()=>{
   const h=workspaceHarness();await h.mount();
-  assert.match(h.root.innerHTML,/aria-label="Knowledge visualization"/);
+  assert.match(h.root.innerHTML,/Select a context/);
+  assert.match(h.root.innerHTML,/aria-label="Context visualization"/);
   assert.match(h.root.innerHTML,/data-context-map/);
-  assert.match(h.root.innerHTML,/aria-label="Open Context A, pm, version 1"/);
+  assert.match(h.root.innerHTML,/aria-label="Open Context A, Product manager, version 1, Up to date"/);
   assert.doesNotMatch(h.root.innerHTML,/internal-A\.md/);
   assert.doesNotMatch(h.root.innerHTML,/context-reader-title/);
   assert.ok(!h.requests.some(url=>url.includes('/contexts/')),'Opening a project must not load an arbitrary context');
@@ -148,13 +204,15 @@ test('knowledge opens on the map and selection focuses content with supporting m
   assert.match(h.root.innerHTML,/id="context-reader-title"[^>]*>Context B/);
   assert.match(h.root.innerHTML,/Body B/);
   assert.match(h.root.innerHTML,/<aside[^>]*aria-label="Context metadata"/);
-  assert.match(h.root.innerHTML,/Back to map/);
-  assert.doesNotMatch(h.root.innerHTML,/data-context-map/);
+  assert.match(h.root.innerHTML,/View map/);
+  assert.match(h.root.innerHTML,/data-context-map/);
+  assert.ok(h.root.innerHTML.indexOf('id="context-reader-title"')<h.root.innerHTML.indexOf('id="context-visualization"'),'Content must appear before the visualization');
   h.click('source');await h.flush();
   assert.match(h.root.innerHTML,/class="cp-markdown cp-source">Body B/);
-  h.click('map');await h.flush();
   assert.match(h.root.innerHTML,/data-context-map/);
-  assert.doesNotMatch(h.root.innerHTML,/context-reader-title/);
+  const selected=h.root.innerHTML;
+  h.click('map');await h.flush();
+  assert.equal(h.root.innerHTML,selected,'Jumping to the map must keep the selected content and source mode');
 });
 
 test('context editing separates the display name from the Markdown filename',async()=>{
@@ -165,25 +223,44 @@ test('context editing separates the display name from the Markdown filename',asy
   assert.match(h.root.innerHTML,/File name<input name="filename"[^>]*value="internal-A.md"/);
   h.click('cancel');await h.flush();
   assert.match(h.root.innerHTML,/id="context-reader-title"[^>]*>Context A/);
+  assert.match(h.root.innerHTML,/data-context-map/);
 });
 
-test('returning to the map cancels a pending context selection',async()=>{
+test('context list, reader and metadata show review tags with escaped change reasons',async()=>{
+  const documents=[card('A'),{...card('B'),status:'stale',requires_review:true,status_label:'Requires review',
+    changed_relationships:[{source_id:'A',source_name:'Design notes',target_id:'upstream',target_name:'Product <script>alert(1)</script>',
+      kind:'references',reviewed_version:1,current_version:2,reason:'version_changed'}]}];
+  const h=workspaceHarness(documents);await h.mount();
+  assert.match(h.root.innerHTML,/cp-list-status[^]*tag amber[^]*Requires review/);
+  assert.match(h.root.innerHTML,/cp-list-status[^]*tag green[^]*Up to date/);
+  h.click('select',{id:'B'});await h.flush();
+  assert.match(h.root.innerHTML,/cp-reader-identity[^]*Context B<\/h2><span class="tag amber">Requires review/);
+  assert.match(h.root.innerHTML,/cp-freshness-note/);
+  assert.match(h.root.innerHTML,/v1 → v2/);
+  assert.match(h.root.innerHTML,/Via Design notes/);
+  assert.match(h.root.innerHTML,/Product &lt;script&gt;/);
+  assert.doesNotMatch(h.root.innerHTML,/<script>/);
+});
+
+test('jumping to the map cancels a pending selection and retains the current content',async()=>{
   const h=workspaceHarness();await h.mount();
   h.click('select',{id:'A'});await h.flush();
   const pending=h.defer();
   h.click('select',{id:'B'});await h.flush();
   h.click('map');await h.flush();
   pending.release(response(card('B')));await h.flush();
-  assert.match(h.root.innerHTML,/aria-label="Knowledge visualization"/);
+  assert.match(h.root.innerHTML,/aria-label="Context visualization"/);
   assert.match(h.root.innerHTML,/data-context-map/);
-  assert.doesNotMatch(h.root.innerHTML,/context-reader-title/);
+  assert.match(h.root.innerHTML,/id="context-reader-title"[^>]*>Context A/);
+  assert.doesNotMatch(h.root.innerHTML,/>Context B<\/h2>/);
 });
 
 
 function mapHarness(initialView) {
   const handlers=new Map(), captured=new Set(), output={textContent:''}, zoomIn={}, zoomOut={}, attributes={};
   const scene={setAttribute:(key,value)=>{attributes[key]=value;}};
-  const svg={dataset:{mapWidth:'1600',mapHeight:'600'},querySelector:()=>scene};
+  const arrows=Array.from({length:3},()=>({attributes:{},setAttribute(key,value){this.attributes[key]=Number(value);}}));
+  const svg={dataset:{mapWidth:'1600',mapHeight:'600'},querySelector:()=>scene,querySelectorAll:()=>arrows};
   const classes=new Set();
   const viewport={
     clientWidth:800,clientHeight:400,clientLeft:0,clientTop:0,
@@ -206,9 +283,27 @@ function mapHarness(initialView) {
     for(const handler of handlers.get(type)||[])handler(event);
     return event;
   };
-  return {controller,emit,viewport,output,zoomIn,zoomOut,attributes,captured,handlers,snapshots};
+  return {controller,emit,viewport,output,zoomIn,zoomOut,attributes,captured,handlers,snapshots,arrows};
 }
 const near=(actual,expected)=>assert.ok(Math.abs(actual-expected)<1e-8,actual+' != '+expected);
+
+test('arrowheads shrink with zoomed-out cards and remain bounded when zooming in',()=>{
+  const html=contextMap.render([card('A'),card('B')],[link('B','A')],'A');
+  assert.equal((html.match(/markerUnits="userSpaceOnUse"/g)||[]).length,3);
+  const h=mapHarness();
+  function check(){
+    const {zoom}=h.controller.getView();
+    for(const arrow of h.arrows){
+      near(arrow.attributes.markerWidth*zoom,8*Math.min(1,zoom));
+      near(arrow.attributes.markerHeight*zoom,8*Math.min(1,zoom));
+    }
+  }
+  check();
+  for(let i=0;i<20;i++){h.controller.command('map-zoom-in');check();}
+  for(let i=0;i<35;i++){h.controller.command('map-zoom-out');check();}
+  h.controller.command('map-fit');check();
+  h.controller.destroy();
+});
 
 test('fitted maps can pan freely and dragging a card does not open it',()=>{
   const h=mapHarness(), before=h.controller.getView();
