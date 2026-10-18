@@ -13,3 +13,9 @@ Recorded with Voila 0.8.0 from the hosted public synthetic MVP. Read the page ou
 - Final MP4 contains the Voila recipe, with adjusted segment timings and post-processing disclosure. The standalone recipe.json and steps.yaml are included.
 
 The recording shows synthetic deterministic walkthroughs, not live AI answers. Its narration explicitly distinguishes the separate verified live team service. No credentials appear in the recording. Public video-host upload is a separate submission action.
+
+## Opening/closing refresh after d01509d review
+
+The teammate change affects local project persistence and automatic sample creation, not the recorded isolated walkthrough or core pitch claims. No full recapture or deck rebuild is warranted. Original browser capture and narration retained. Added original vector opening/closing cards: royal-blue grid/glow, five-role context network, product promise, team credits, three closing judge CTAs and both deployed URLs. Editable artwork and raster renders are included.
+
+Re-exported from the original capture, preserving the entire narrative at exactly 180.00 seconds. Reviewed twelve updated evenly spaced frames as a contact sheet, plus the actual encoded final frame (179.9s) and first-frame preview. No clipped text or missing title cards; walkthrough captions and evidence remain visible. Voila review reports no warnings. Current deployed service independently reaches 12/12 verified in the browser; current code verification is 125 Python / 42 Node. Existing deck/capture evidence counts remain historical.

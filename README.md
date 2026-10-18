@@ -158,3 +158,5 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before making changes. Keep synthetic de
 ## License
 
 A distribution license has **not yet been selected**. No open-source license grant is implied. The project owner should choose and add an appropriate `LICENSE` before public release.
+
+Local Knowledge projects now persist under ignored storage/projects.json and storage/projects/, shared by local browser/MCP sessions. Projects are created explicitly; missing metadata requires recovery before edits. Hosted workspaces keep project content in Firestore. See [storage guide](storage/README.md). The reviewed d01509d build is deployed to both hosted MVP URLs; submission media remain under [deliverables](deliverables/README.md).

@@ -358,6 +358,6 @@
   "postProcess": {
     "durationSec": 180,
     "playbackRate": 1.1644444444444444,
-    "titleCards": "High-contrast title cards rendered in FFmpeg after Voila frame review"
+    "titleCards": "Original vector opening and closing artwork overlaid after Voila frame review; walkthrough and narration preserved"
   }
 }

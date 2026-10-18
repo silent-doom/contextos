@@ -26,4 +26,6 @@ Team: **Three-Way Handshake** — Faizan Choudhary, Amogh Prabhu, Ankush Bhagat.
 
 ## Capture version
 
-The deck/video capture the verified MVP before late team changes merged on 18 October. Their 105 Python / 36 JavaScript figures describe that capture; the integrated source now passes 114 / 41 and is deployed. Core walkthrough controls and evidence remain valid. See deployment/verification.md for the current revisions and new context-page verification.
+The deck/video capture the verified MVP before late team changes merged on 18 October. Their 105 Python / 36 JavaScript figures describe that capture; the integrated source now passes 125 / 42 and is deployed. Core walkthrough controls and evidence remain valid. See deployment/verification.md for the current revisions and new context-page verification.
+
+After reviewing d01509d, retained the pitch and recorded walkthrough because no core flow or architecture claim changed. Refreshed video opening/closing cards with original branded vector artwork and hosted access links. SVG/PNG assets and reproducing scripts are included; MP4 remains exactly three minutes.

@@ -151,3 +151,9 @@ Final presentation checkpoint: preserved latest reviewer file; no new reviewer e
 Late upstream review: caught undefined markdown_storage after team merge, restored injection and kept Firestore authoritative for cloud context bodies. Local file mirror remains available for development. New no-files adapter regression plus complete integration: 114 Python + 41 Node pass. No tests skipped, no reviewer files overwritten.
 
 Final latest-main gate: integrated CI 114 Python + 41 Node tests is green; both cloud services updated. New context-page flow passes against canonical Firestore (create, independent review, exact approved body/export and fresh-session persistence). Judge member and sample projects verified. Complete media committed under deliverables/; no credentials or reviewer edits published.
+
+## Response to d01509d and current reviewer notes — 18 October 2026
+
+Accepted teammate persistence changes after five-axis review, 125 Python / 42 Node tests and live Firestore review/export verification. Cloud deployment remains canonical Firestore; local shared registry is intentionally single-process. Sample auto-seeding removal does not change isolated twelve-case walkthroughs (12/12 verified on the deployed service). gemini.md's existing theme requests are historical and conflict with the subsequently accepted current team design; no theme rollback. Its cloud verification request is fulfilled. Preserved the independent reviewer file.
+
+Media decision: storage plumbing and removal of automatic local samples do not materially change the pitch or recorded workflow. No deck rebuild; capture test counts remain explicitly historical. Refreshed the Voila video's opening and closing only, with original vector artwork, role network, action cards and deployed links. Original narration and walkthrough retained.

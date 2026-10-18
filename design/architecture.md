@@ -122,3 +122,7 @@ merge boundary without changing backend authority or context storage.
 ## Live MVP topology — 18 October 2026
 
 Google Cloud project contextos-512006 now hosts the team and synthetic demo services in Cloud Run asia-south1, with Firestore Native in the same region. Team sessions verify signed membership and use live Vertex AI in global; public walkthrough disables AI calls. PUBLIC_ORIGIN provides the exact advertised HTTPS origin for write checks behind the hosting proxy; forwarded headers cannot choose the allowed origin. Dedicated runtime/build IAM and the custom two-permission session role are documented in deployment/verification.md. This is an MVP deployment; no enterprise operations certification is implied.
+
+### Project persistence boundary (d01509d review)
+
+Context-page routes use a project-store interface. LocalProjects maintains storage/projects.json plus Markdown objects with an in-process shared lock and atomic registry replacement; local demo sessions discover the same projects. Local verified workspaces retain an internal access scope. FirestoreProjects delegates to the existing authorized workspace transaction store and returns exact stored Markdown, with no disk dependency or fallback. Cloud Run selects this provider explicitly. Missing local metadata exposes a read-only recovery notice; original metadata is required to restore governance history. Multi-process local registry writes are outside this MVP's supported topology.
