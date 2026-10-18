@@ -93,3 +93,5 @@ to 85 Python + 36 Node. CI includes that suite; hosted verification is pending.
 ## Live deployment evidence — 18 October
 
 Team sign-in, role/workspace claims, session cookies, Firestore persistence, independent review and live Vertex AI are verified on Cloud Run. A separate synthetic demo is authorized for judge exploration and recording; it does not make live model calls. Product remains a hackathon MVP. Pitch and narrated video are being prepared under deliverables/.
+
+Submission media delivered: three-minute narrated/captioned MP4 with title cards, five personas across representative workflows and all twelve cases verified; 14-slide editable landscape PPTX and matching PDF cover problem, differentiation, workflow, architecture, SWOT, limits and roadmap. Dedicated judge member login and synthetic shared workspace verified with live AI extraction; credentials remain private.

@@ -1,0 +1,13 @@
+const fs=require('fs'),{spawnSync}=require('child_process');
+const ffmpeg=require('/Users/faizanchoudhary/.npm/_npx/49e263e5a42648bf/node_modules/ffmpeg-static');
+const review=JSON.parse(fs.readFileSync('.data/video-review.json'));const duration=review.durationSec;const ratio=180/duration;
+for(const [n,t] of Object.entries({title:'ContextOS',intro:'Shared decisions. Traceable work.',team:'Three-Way Handshake',outro:'Keep decisions connected to work',cta:'Explore the hosted MVP',scope:'Hackathon MVP | Synthetic walkthrough | Live team service verified'}))fs.writeFileSync(`.data/video-build/${n}.txt`,t);
+const font='/System/Library/Fonts/Supplemental/Arial.ttf';
+const firstEnd=8.826,lastStart=196.3;
+const intro=`between(t,0,${firstEnd})`,outro=`gte(t,${lastStart})`,both=`lt(t,${firstEnd})+gte(t,${lastStart})`;
+const draw=(name,size,y,enable,color='white')=>`drawtext=fontfile='${font}':textfile='.data/video-build/${name}.txt':fontsize=${size}:fontcolor=${color}:x=(w-text_w)/2:y=${y}:enable='${enable}'`;
+const filters=[`drawbox=x=0:y=0:w=iw:h=ih:color=0x10256D:t=fill:enable='${both}'`,draw('title',108,'h*0.28',intro),draw('intro',47,'h*0.46',intro),draw('team',36,'h*0.60',both,'0xCFD8FF'),draw('scope',25,'h*0.78',both,'0xCFD8FF'),draw('outro',70,'h*0.30',outro),draw('cta',46,'h*0.48',outro),`setpts=${ratio}*(PTS-STARTPTS)`].join(',');
+const recipe=review.recipe;recipe.durationSec=180;recipe.segments=recipe.segments.map(s=>({...s,at:+(s.at*ratio).toFixed(2)}));recipe.postProcess={durationSec:180,playbackRate:duration/180,titleCards:'High-contrast title cards rendered in FFmpeg after Voila frame review'};
+fs.writeFileSync('deliverables/demo/recipe.json',JSON.stringify(recipe,null,2));
+const args=['-y','-i','.data/video-build/demo.mp4','-vf',filters,'-af',`atempo=${duration/180},apad`,'-t','180','-r','30','-c:v','libx264','-preset','fast','-crf','21','-c:a','aac','-b:a','160k','-movflags','+faststart','-map_metadata','-1','-metadata','comment=voila-recipe:'+JSON.stringify(recipe),'deliverables/demo/ContextOS-Demo.mp4'];
+const r=spawnSync(ffmpeg,args,{encoding:'utf8',maxBuffer:8e6});fs.writeFileSync('.data/video-build/finalize.log',r.stderr);if(r.status!==0)throw Error(r.stderr.slice(-2000));console.log('Three-minute narrated MP4 exported.');

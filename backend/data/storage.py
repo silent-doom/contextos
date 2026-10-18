@@ -1,4 +1,4 @@
-"""Temporary local Markdown storage. Replace this adapter with Firestore.
+"""Markdown access for local files or canonical Firestore workspace records.
 
 Local project metadata and review hashes are saved in storage/projects.json.
 Only authorized records supplied by the API are written or read here.
@@ -80,3 +80,25 @@ class MarkdownStorage:
                     self.revision(project['id'], revision, create=True)
             for proposal in project['proposals'].values():
                 self.proposal(project['id'], proposal, create=True)
+
+
+class WorkspaceMarkdownStorage:
+    """Read the authorized content already committed in the workspace database.
+
+    Firestore transactions persist bodies, revisions and proposal hashes together.
+    Keeping a second filesystem copy would add an ephemeral Cloud Run dependency.
+    """
+    def revision(self, project_id, doc):
+        return doc['content']
+
+    def proposal(self, project_id, proposal):
+        return proposal['candidate']['content']
+
+    def sync(self, state):
+        # The enclosing workspace transaction persists all of these records.
+        pass
+
+
+def make_markdown_storage(store, root):
+    from backend.store import FirestoreStore
+    return WorkspaceMarkdownStorage() if isinstance(store, FirestoreStore) else MarkdownStorage(root)

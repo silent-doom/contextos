@@ -81,6 +81,10 @@ The activity view/export returns the latest 100 visible events. It is a prototyp
 
 The UI uses royal-blue accents and navigation, an off-white background, and white cards, retaining the typography from commit `4e1bd51`, the CTA-focused layout, and guided walkthroughs. Fonts load from Google Fonts, with system fallbacks when offline. Historical design references remain in `design_revamp/`.
 
+## Hackathon media
+
+The [deliverables folder](deliverables/README.md) contains the three-minute narrated demo and editable landscape pitch/PDF with SWOT, architecture and verification evidence. Judge credentials remain private.
+
 ## Development checks
 
 From the repository root (the full Python API/MCP suite needs its pinned test dependency):

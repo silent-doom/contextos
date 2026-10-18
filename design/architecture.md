@@ -118,3 +118,7 @@ generation and clears the page module, whose own generation cancels pending
 loads. Integration fixtures load both real modules and supply location/history;
 CI runs these contracts alongside the context-page/map suite. This repairs the
 merge boundary without changing backend authority or context storage.
+
+## Live MVP topology — 18 October 2026
+
+Google Cloud project contextos-512006 now hosts the team and synthetic demo services in Cloud Run asia-south1, with Firestore Native in the same region. Team sessions verify signed membership and use live Vertex AI in global; public walkthrough disables AI calls. PUBLIC_ORIGIN provides the exact advertised HTTPS origin for write checks behind the hosting proxy; forwarded headers cannot choose the allowed origin. Dedicated runtime/build IAM and the custom two-permission session role are documented in deployment/verification.md. This is an MVP deployment; no enterprise operations certification is implied.

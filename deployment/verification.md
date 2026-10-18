@@ -29,7 +29,7 @@ The public walkthrough is explicitly synthetic and runs AI_MODE=offline. It supp
 - Firestore verification workspace verification-27439140267d450095f5b928b80b901a: concurrent approval has one winner; recreated/second clients see v2; original snapshot stays v1 and stale.
 - Deployed browser-style collaboration workspace cloud-verification-ddf44f6c9866: two real sessions, denied author approval, independent publication, live AI task, v2 publication, stale original manifest, fresh v2 rerun, returning-session persistence and logout pass. Test now sends the actual browser Origin header. Temporary verification users deleted.
 - Retained synthetic accepted topic CTX-3a1c270405, initial run RUN-9ce893304d and refreshed run RUN-60899522f3 are diagnostic evidence, not real customer data.
-- Judge member: live password sign-in/session exchange, six visible accepted topics, denied role switching and logout/401 pass.
+- Judge member: live password sign-in/session exchange, six visible accepted topics, live structured note extraction into a pending proposal, denied role switching and logout/401 pass.
 - Local regression suite: 105 Python and 36 JavaScript tests pass. Two existing upstream deprecation warnings remain.
 
 ## HTTPS proxy correction
@@ -48,3 +48,11 @@ gcloud run services update-traffic contextos --to-revisions VERIFIED_REVISION=10
 ```
 
 Do not roll back to the original browser-origin-broken revision. Revisions do not roll back Firestore data. Retain existing immutable history; no destructive migration was performed. The workspace byte/call limits and instance limits are not global budget caps. Keep synthetic evaluation data separate from future real team data.
+
+## Latest integrated revision
+
+Team revision contextos-00003-8k8 and public demo revision contextos-demo-00003-zrp deploy source commit 6a27264, including the late shared-knowledge changes. CI run 39150725586 passed with 114 Python and 41 Node cases. The missing Markdown adapter injection from the upstream merge was repaired before deployment.
+
+Firestore deployments use WorkspaceMarkdownStorage to read exact bodies from canonical database records; only local stores use the temporary file mirror. Deployed context-page verification created project PRJ-431c6c8485 and context CTX-3fe131d906 in synthetic workspace cloud-verification-56263b6a4eb3. Independent approval, exact normalized-body read/export and fresh-session persistence pass. A first assertion compared the request template's trailing newline instead of the normalized reviewed candidate; the targeted verification was corrected to compare the exact accepted candidate, without changing application content. Temporary accounts were deleted, including two leftovers from the interrupted run.
+
+The judge workspace also includes two explicitly synthetic sample projects from the team's fixture for immediate Knowledge/map exploration. The judge remains a Developer member; sample baseline author/reviewer entries are labeled demo fixtures. Judge session/extraction/role-denial/logout checks pass on the latest revision. The pitch/video capture the preceding verified MVP snapshot (105/36 test counts at recording time); new code has the larger integrated suite above.
