@@ -8,7 +8,7 @@ Open the existing app at http://127.0.0.1:8000/knowledge after restarting it:
 python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000
 ~~~
 
-1. Create a project with name, type and description. Your authenticated user ID is the admin; the server records timestamps. Projects start empty.
+1. Select one existing project from the sidebar. Local mode loads projects from storage/ and never seeds samples or creates per-session projects. Use New project to explicitly create an empty project with name, type and description; your authenticated user ID becomes its admin.
 2. Propose a context with a display name, a separate plain .md filename, Markdown, owner, owner type and optional relationships.
 3. Open **Proposals**, inspect the proposed content and metadata, and approve as an independent reviewer with the designated owner role.
 4. Read the approved Markdown and map. Edits and deletions use the same review flow.
@@ -31,13 +31,27 @@ Context records contain name, filename, content, owner, owner_type, relationship
 
 owner is a person/team label; owner_type selects the trusted reviewer role (pm, architect, developer, qa, security). A transfer requires the current owner role to review. The proposal author cannot decide their own proposal.
 
-All projects in a workspace are readable by its authenticated members. Workspace membership/roles come from the host's verified identity, never request fields. This prototype has no per-project invitations or private-document policies. Existing restricted knowledge and legacy workflows remain in their original API.
+Local demo project/context data is shared by local browser and MCP sessions through the same storage/ registry. If Firebase authentication is used locally, records retain their verified access scope in that registry. Production Firestore records remain scoped to the host's verified identity; membership/roles never come from request fields. This prototype has no per-project invitations or private-document policies. Existing authentication, restricted knowledge and agent workflows remain in their original API.
 
 Updates replace the context fields and require expected_version. Review requires the exact proposal hash, covering content, metadata, relationships and dependency versions. Competing accepted revisions or changed dependencies produce HTTP 409. Rejection leaves accepted content unchanged.
 
-depends_on relationships affect freshness and downstream impact; references do not. A context is stale when an accepted dependency version changed, including transitively. This measures revision freshness, not whether the text is factually correct. Review and approve an update to refresh its dependency baseline. Cyclic dependencies and cross-project links are rejected. Remove inbound links through approved updates before deleting a context. Deletion retains version history.
+Both outgoing depends_on and references relationships affect freshness and downstream impact, including transitively. When a linked context publishes a new approved version, its consumers show **Requires review** in the map, context list and reader. Unchanged contexts show **Up to date**. Pending/rejected proposals do not change freshness. Review the affected content and approve an update (even if its text needs no change) to refresh its relationship baseline. Any other stale upstream links still require review. This measures approved revision freshness, not factual correctness. Cyclic dependencies and cross-project links are rejected; reference cycles terminate safely and a context's own revision is excluded from its upstream changes. Remove inbound links through approved updates before deleting a context. Deletion retains version history.
 
-The host's existing transactional store persists these records under context_projects in the workspace payload. No database provider, connection, schema, environment or migration changes. Limits: 10 projects/workspace, 30 contexts/project including deleted history, 50 pending proposals/project, 12,000 UTF-8 bytes/context, plus the host's existing aggregate size cap. No disk Markdown mirrors or runtime databases are added to the repository.
+Current-context JSON responses (project contexts, list/search, read, graph, impact, status, sections and extraction) and their MCP tools include the same freshness fields:
+
+~~~json
+{"status":"stale","status_label":"Requires review","up_to_date":false,"requires_review":true,"changed_relationships":[{"source_id":"CTX-design","source_name":"System Architecture","target_id":"CTX-requirements","target_name":"Product Requirements","kind":"depends_on","reviewed_version":1,"current_version":2,"reason":"version_changed"}]}
+~~~
+
+status retains up_to_date/stale/deleted for existing clients. changed_relationships identifies each changed link, including an indirect source when the change is transitive; reason can also be missing, deleted or untracked. changed_dependencies remains a compatibility list of changed target IDs and now includes references. get_context_status also reports pending_proposals and optional known_version_current. Historical versions remain immutable snapshots, not current freshness reports. All freshness is calculated on reads; no database tables or migrations are added. Older dependency baselines remain valid; reference baselines are recovered from approved history at the context/proposal timestamp. If that evidence is unavailable, the context requires review rather than silently appearing current. Legacy proposal hashes and approved histories are preserved.
+
+Local project/context data comes exclusively from storage/projects.json (project metadata, reviewed content copies, relationships, proposals, approvals and history) and storage/projects/{project_id}/ (proposal Markdown and immutable approved versions). Project IDs are server generated. Reads never regenerate missing files. Metadata commits use atomic file replacement after Markdown writes; an aborted commit can leave an unreferenced object. Content hashes prevent competing proposals from overwriting approved files. Local data is excluded from Git and never served as public static files. This prototype uses one local server process. Browser cookies do not partition or seed local projects.
+
+When STORE_BACKEND=firestore or K_SERVICE is set, the project provider uses the existing Firestore transaction store for both metadata and Markdown. Production never uses storage/ or falls back to local files. This does not change database configuration or the other backend modules' storage.
+
+Existing Markdown-only folders are listed with metadata_missing=true and their folder ID as the name. They remain read-only; restore the original project metadata to recover names, owners, relationships and approval history. Missing metadata is never inferred or published from raw Markdown.
+
+No database provider, connection, schema or environment changes. Limits: 10 registered projects, 30 contexts/project including deleted history, 50 pending proposals/project and 12,000 UTF-8 bytes/context. Firestore retains the host's existing aggregate size cap. Uncatalogued folders do not count against the registered project limit.
 
 ## HTTP and MCP
 
@@ -70,6 +84,8 @@ All paths below start with /api/context. IDs are server generated. Browser write
 
 UI review: POST /projects/{project}/proposals/{proposal}/review with {"hash":"exact SHA256","decision":"approve"} or reject. Approval is deliberately absent from the agent tool set. UI Markdown download: GET /projects/{project}/contexts/{context}/markdown.
 
+Legacy sample creation: POST /projects/samples is disabled (409 locally, 403 outside demo mode). Startup and session changes never call it.
+
 List/search accept offset and limit (1–100). Read/extract accept bounded character limits (at most 12,000). Version lists omit old contents; request a specific version to read them.
 
 New project:
@@ -101,8 +117,10 @@ Host configuration (replace paths with your interpreter and checkout):
 {"mcpServers":{"contextos":{"command":"C:/path/to/contextos/.venv/Scripts/python.exe","args":["C:/path/to/contextos/backend/mcp/server.py"],"env":{"CONTEXT_API_URL":"http://127.0.0.1:8000"}}}}
 ~~~
 
-The MCP client keeps one demo session across calls. Demo browser sessions are separate sandboxes, so their projects are separate from MCP's sandbox. In Firebase mode, provide a valid token through the host's private CONTEXT_API_TOKEN environment; identities sharing verified workspace claims see the same projects. Tokens are never tool inputs or persisted. Only local API origins are supported.
+The MCP client keeps its authenticated session across calls. Local browser and MCP sessions discover the same saved projects. In Firebase mode, provide a valid token through the host's private CONTEXT_API_TOKEN environment; identities sharing verified workspace claims see the same projects. Tokens are never tool inputs or persisted. Only local API origins are supported.
 
 The UI uses locally bundled Marked and DOMPurify; rendered Markdown is sanitized with a narrow tag/attribute allowlist. Images and executable/interactive HTML are excluded. Bundle versions and licenses are in web/vendor/README.md. No npm build is required.
 
-Checks: python -m pytest -q tests backend/api/tests and node --test tests/browser_auth.test.cjs backend/api/tests/context_pages.test.cjs. API tests use an isolated memory store and include a real MCP stdio round trip. No live database changes are required.
+Checks: python -m pytest -q tests backend/api/tests and node --test tests/browser_auth.test.cjs tests/browser_workspace.test.cjs backend/api/tests/context_pages.test.cjs. Project API tests use isolated local storage or an injected cloud-store double and include a real MCP stdio round trip. No live database changes are required.
+
+Cloud deployments keep Markdown bodies and history in the same canonical Firestore transaction as project metadata and proposal hashes. No local Markdown directory is required in production.

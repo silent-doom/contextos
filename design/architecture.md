@@ -130,8 +130,13 @@ Old workspaces remain a separate compatible scope. Workspace membership is the
 current project access boundary; page-specific grants are not added here.
 
 HTTP and MCP proposals pass through the same application boundary. Publication
-updates the canonical revision, marks affected project runs and records the
-attributed audit event in one store transaction. New or changed requirements and
+updates the canonical revision and enriches the existing project audit event in
+one transaction. Firestore marks affected project runs in the same transaction.
+Locally, ProjectWorkspaceStore joins the shared project registry to private
+SQLite task state without copying canonical content; freshness and change reasons
+are derived from current revisions and publication events on each read. Local
+publication never depends on an unreliable write across two databases. Current
+Markdown is verified against its reviewed body before retrieval. New or changed requirements and
 security guardrails conservatively flag all earlier project work, including runs
 that never loaded a newly introduced rule. These roles supply deterministic
 mandatory context; prerequisite dependencies must also fit the source budget.
@@ -147,8 +152,15 @@ new working segment; old turns remain visible. Project/persona changes and
 sign-out clear the controller, timers and private buffers; generation checks
 discard late responses. Existing standalone task clients remain compatible.
 
-Project selection comes from the existing Knowledge picker and persists in the
-browser session. Initial load selects the first available project, and removed
-projects fall back to permitted projects. No extra project selector or synthetic
-setup flow is added. The mobile More menu has its own layout instead of inheriting
+One sidebar project selector serves Knowledge, Work, Overview and Inbox and
+persists in the browser session. Initial load selects the first available project, and removed
+projects fall back to permitted projects. No duplicate picker or synthetic setup flow is added. The mobile More menu has its own layout instead of inheriting
 sidebar navigation styles, with selection/outside-click/Escape dismissal.
+
+## Live MVP topology — 18 October 2026
+
+Google Cloud project contextos-512006 now hosts the team and synthetic demo services in Cloud Run asia-south1, with Firestore Native in the same region. Team sessions verify signed membership and use live Vertex AI in global; public walkthrough disables AI calls. PUBLIC_ORIGIN provides the exact advertised HTTPS origin for write checks behind the hosting proxy; forwarded headers cannot choose the allowed origin. Dedicated runtime/build IAM and the custom two-permission session role are documented in deployment/verification.md. This is an MVP deployment; no enterprise operations certification is implied.
+
+### Project persistence boundary (d01509d review)
+
+Context-page routes use a project-store interface. LocalProjects maintains storage/projects.json plus Markdown objects with an in-process shared lock and atomic registry replacement; local demo sessions discover the same projects. Local verified workspaces retain an internal access scope. FirestoreProjects delegates to the existing authorized workspace transaction store and returns exact stored Markdown, with no disk dependency or fallback. Cloud Run selects this provider explicitly. Missing local metadata exposes a read-only recovery notice; original metadata is required to restore governance history. Multi-process local registry writes are outside this MVP's supported topology.

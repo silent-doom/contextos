@@ -70,7 +70,17 @@ requirements/security change, including newly introduced mandatory rules.
 Private conversation UI must reopen saved work, continue with bounded history,
 reuse request keys on failure/pending recovery, inspect individual turns and
 require explicit refresh after context changes. Session cleanup discards pending
-responses and cancels polling. Keep project selection in the existing Knowledge
-view and the header compact. Do not add demo examples, setup endpoints or
+responses and cancels polling. Use the single sidebar project selector across Knowledge, Work, Overview and
+Inbox; keep the header compact. Do not add demo examples, setup endpoints or
 promotional controls; the user owns the live demo. This supersedes the earlier
 backend-only conversation UI status; live cloud validation remains open.
+
+
+Login presentation: user-facing copy must use ContextOS product terminology and actionable recovery messages, without provider names, public API-key instructions or infrastructure setup jargon. Keep exact Firebase/Firestore setup in operator docs and preserve truthful availability states. Selected cloud project is contextos-512006 under choudhary.faizan2002@gmail.com.
+
+## MVP delivery refinement — 18 October
+
+Production-ready refers to interface design and presentation, not an enterprise readiness claim. Deliver the verified Cloud Run MVP, a public synthetic walkthrough with AI disabled, a narrated Voila MP4 with opening/closing title slides and per-beat captions, and a professional landscape PPTX plus PDF covering problem, workflow, differentiation, architecture, evidence, SWOT and roadmap. Save sources and outputs under deliverables/; no credentials in media or Git.
+
+- Local Knowledge reads must discover saved project metadata without session-based seeding; absent metadata must not manufacture owners or approval state. Cloud project metadata/content must remain in scoped Firestore transactions without filesystem fallback.
+- Assess product/story impact before regenerating submission media. Keep accurate existing walkthrough/deck content; opening/closing cards must clearly distinguish synthetic exploration and the live team workspace.

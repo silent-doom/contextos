@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import secrets
 from typing import Literal
+from urllib.parse import urlsplit
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -69,11 +70,23 @@ class RoleInput(Input):
     role: Literal['pm', 'architect', 'developer', 'qa', 'security']
 
 
-def create_app(store=None, ai=None):
+def create_app(store=None, ai=None, markdown_storage=None, project_store=None):
+    public_origin = os.getenv('PUBLIC_ORIGIN', '').rstrip('/')
+    if public_origin:
+        parsed = urlsplit(public_origin)
+        if (parsed.scheme not in ('http', 'https') or not parsed.hostname or parsed.username
+                or parsed.password or parsed.path or parsed.query or parsed.fragment):
+            raise RuntimeError('PUBLIC_ORIGIN must be an absolute HTTP(S) origin without a path or credentials.')
     app = FastAPI(title='ContextOS', docs_url='/api/docs', redoc_url=None)
     app.state.store = store or make_store()
     app.state.ai = ai or AI()
-    app.state.conversations = ConversationService(app.state.store, app.state.ai)
+    from backend.data.storage import make_markdown_storage
+    app.state.markdown_storage = markdown_storage or make_markdown_storage(app.state.store, ROOT / 'storage')
+    from backend.data.projects import make_project_store
+    app.state.project_store = project_store or make_project_store(app.state.store, app.state.markdown_storage)
+    from backend.data.workspace import ProjectWorkspaceStore
+    app.state.work_store = ProjectWorkspaceStore(app.state.store, app.state.project_store)
+    app.state.conversations = ConversationService(app.state.work_store, app.state.ai)
     auth_mode = os.getenv('AUTH_MODE', 'demo')
     if auth_mode not in ('demo', 'firebase'):
         raise RuntimeError('AUTH_MODE must be demo or firebase.')
@@ -92,7 +105,7 @@ def create_app(store=None, ai=None):
             operation = request.url.path.split('/')[2]
             outcome = 'blocked' if exc.status in (403, 404, 409, 422, 429) else 'failed'
             try:
-                app.state.store.mutate(wid, lambda s: d.audit(
+                app.state.work_store.mutate(wid, lambda s: d.audit(
                     s, actor, f'{operation.title()} {outcome}', None,
                     f'HTTP {exc.status}. The request did not complete.',
                     role=role, outcome=outcome, private_role=role,
@@ -109,7 +122,7 @@ def create_app(store=None, ai=None):
             if request.headers.get('x-contextos-client') != 'workspace':
                 return JSONResponse({'detail': 'Missing same-origin client header.'}, status_code=403)
             origin = request.headers.get('origin')
-            if origin and origin.rstrip('/') != str(request.base_url).rstrip('/'):
+            if origin and origin.rstrip('/') != (public_origin or str(request.base_url).rstrip('/')):
                 return JSONResponse({'detail': 'Cross-origin writes are not allowed.'}, status_code=403)
             try:
                 length = int(request.headers.get('content-length', '0'))
@@ -174,7 +187,7 @@ def create_app(store=None, ai=None):
     @app.get('/api/workspace')
     def workspace(request: Request, response: Response, project_id: str | None = None):
         wid, actor, role = identity(request, response)
-        current = app.state.store.read(wid)
+        current = app.state.work_store.read(wid)
         selected = pc.view(current, project_id)
         result = d.snapshot(selected, role, actor)
         result.update(actor=actor, ai_mode=app.state.ai.mode, auth_mode=auth_mode,
@@ -214,7 +227,7 @@ def create_app(store=None, ai=None):
             d.audit(s, actor, 'Context assembled', None, f"{len(result['sources'])} accepted sources selected.",
                     role=role, source_ids=[x['id'] for x in result['sources']], project_id=data.project_id)
             return result
-        return app.state.store.mutate(wid, assemble_context)
+        return app.state.work_store.mutate(wid, assemble_context)
 
     @app.post('/api/conversations')
     def create_conversation(data: ConversationInput, request: Request, response: Response):
@@ -241,7 +254,7 @@ def create_app(store=None, ai=None):
     @app.post('/api/tasks')
     def task(data: TaskInput, request: Request, response: Response):
         wid, actor, role = identity(request, response)
-        manifest = pc.assemble(app.state.store.read(wid), role, data.query, data.budget, data.project_id)
+        manifest = pc.assemble(app.state.work_store.read(wid), role, data.query, data.budget, data.project_id)
         call_id = reserve(wid, role, [x['id'] for x in manifest['sources']], 'task', data.project_id)
         usage = None
         try:
@@ -253,7 +266,7 @@ def create_app(store=None, ai=None):
                 d.finish_usage(s, call_id, usage)
                 d.audit(s, actor, 'Task completed', None, f"Run {run['id']} · {len(manifest['sources'])} sources",
                         role=role, source_ids=[x['id'] for x in manifest['sources']], project_id=data.project_id)
-            app.state.store.mutate(wid, save)
+            app.state.work_store.mutate(wid, save)
             return run
         except Exception as exc:
             def failed(s):
@@ -296,7 +309,7 @@ def create_app(store=None, ai=None):
             for item in result['conversations']:
                 item['turns'] = [deepcopy(s['tasks'][tid]) for tid in item['turn_ids']]
             return result
-        return app.state.store.mutate(wid, export_visible)
+        return app.state.work_store.mutate(wid, export_visible)
 
     @app.post('/api/activity')
     def activity(data: ActivityInput, request: Request, response: Response):
@@ -317,10 +330,12 @@ def create_app(store=None, ai=None):
                         private_actor=actor if task.get('conversation_id') else None,
                         conversation_id=task.get('conversation_id'), project_id=task.get('project_id'))
             return {'recorded': True}
-        return app.state.store.mutate(wid, record)
+        return app.state.work_store.mutate(wid, record)
 
     from backend.api.main import create_router
-    app.include_router(create_router(workspace), prefix='/api/context', tags=['Shared knowledge'])
+    def context_identity(request: Request, response: Response):
+        identity(request, response)
+    app.include_router(create_router(context_identity, demo_mode=auth_mode == 'demo'), prefix='/api/context', tags=['Shared knowledge'])
 
     @app.get('/favicon.ico', include_in_schema=False)
     def favicon():

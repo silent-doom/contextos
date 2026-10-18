@@ -184,3 +184,58 @@ Added clean authenticated-workspace initialization without synthetic knowledge, 
 - Updated the fixture to load the real context-map/context-pages modules and model URL/history behavior. Restored Work/Inbox render dispatch, Inbox initialization, primary/secondary navigation, Overview/Inbox refresh and the protected-generation increment. Preserved /knowledge, contextpages/tasks/reviews aliases, popstate, query strings and real page lifecycle cleanup; bumped the app asset version.
 - Added six integration regressions covering direct Knowledge paths, history/aliases, link routing, pending page loads after navigation/sign-out and 401 handoff. CI also checks the new modules' syntax and runs the existing 14 context-page/map tests.
 - Validation: 85 Python + 36 Node tests pass on Node 24.18.0; syntax, served assets, rehearsal, repository hygiene and diff checks pass. Two pre-existing Python warnings remain. Hosted CI on this fix and visual browser verification remain pending. No browser/account settings or backend policy changes were needed.
+
+## 2026-10-18 — Selected cloud project and professional sign-in copy
+
+Owner selected contextos-512006 and corrected the Google identity to choudhary.faizan2002@gmail.com. Initial lookup using the previously active account returned permission denied. Started the normal gcloud browser authorization for the selected account; user completion is pending. Removed provider branding/setup jargon from rendered sign-in and auth errors, preserving explicit temporary-unavailable/retry states. Technical provider details remain in operator docs.
+
+Remote integration checkpoint: preserved team commits through 67c891a (conversation backend, Overview/Work/Knowledge/Inbox and shared context pages/MCP). Resolved appended-log conflicts by retaining both histories and kept the new provider-neutral login copy. No remote work overwritten.
+
+## 2026-10-18 — CI integration and deployment access
+
+Preserved current team routing and its six additional browser regression tests from 7e123fc, together with product-neutral sign-in copy. CI now installs the pinned MCP test dependency and pytest discovers backend/api/tests; all JavaScript modules and both Node suites run. Local validation: 100 Python and 36 Node tests, repository hygiene and governed rehearsal pass, with two existing dependency warnings. GitHub runs 39146920029 and 39146703870 are green; earlier 39145607611 failed browser JavaScript. Selected Google account is authenticated and can access contextos-512006. Billing is disabled and Firestore API is not yet enabled; requested end-to-end deployment awaits billing. No deployment claimed.
+
+## 2026-10-18 — Live MVP deployment
+
+Billing enabled by owner. Provisioned required APIs, Firestore Native in asia-south1 with deletion protection, deny-all client rules and aggregate payload index exclusion. Dedicated runtime/build identities; runtime has datastore.user, aiplatform.user and custom firebaseauth.users.get/createSession permissions. Cloud Run contextos revision contextos-00001-vfs serves the public sign-in page with protected APIs, live Gemini 2.5 Flash and Firestore. Owner explicitly approved initial member-account creation, two temporary test accounts/deletion, disabling public signup, and a separate synthetic demo service with AI disabled. Owner password is only in ignored .data/cloud-access.txt, mode 0600. Live Firestore concurrency and deployed two-session proposal/review/AI/staleness/persistence/logout verification pass; synthetic evidence retained, temporary accounts deleted. Owner clarified production-ready means visual polish; scope remains hackathon MVP. User requested narrated Voila video plus landscape PPTX/PDF pitch in repository folders.
+
+Browser verification found and fixed Cloud Run HTTPS-origin rejection with explicit validated PUBLIC_ORIGIN. Added five regressions and Origin to the deployed verifier; all 105 Python + 36 Node tests pass. Deployed correction to team revision contextos-00002-9jv and demo revision contextos-demo-00002-74t. Repeated live two-user verification including Origin passes; judge member sign-in, scoped data, denied role switching and logout pass. Dedicated judges-mvp synthetic workspace created at owner request; credentials remain in ignored .data/judge-access.txt. Added a build-upload allowlist, repeatable redeploy script and deployment evidence/runbook.
+
+## 2026-10-18 — Judge access and submission media completed
+
+Created the requested separate judges-mvp synthetic workspace and Developer member; live password/session/scoped sources/extraction/role-denial/logout pass. Password is only in ignored mode-0600 .data/judge-access.txt. Built a 14-slide landscape pitch from the official template using native editable text/tables/diagrams, with team names, SWOT, architecture, actual screenshot, evidence, limits and roadmap; exported PDF from final PPTX and inspected every page. PDF is under 5 MB and access links are clickable. Recorded 31 narrated/captioned Voila beats from the hosted synthetic URL, reviewed twelve initial frames, fixed title contrast in post (without relaxing CSP), and paced the full capture to exactly three minutes. Reviewed twelve final frames plus opening/12-of-12 verification; H.264/AAC audio confirmed. Final MP4, prompt, YAML, recipe, review notes and authoring sources are under deliverables/. Temporary raw files stay in .data/. Public video-host upload/final portal submission remain owner actions. CI for 0581757 is green.
+
+## 2026-10-18 — Preserve late team changes and cloud persistence
+
+Remote main advanced to 59dceaa while media was finalized. Merged shared-knowledge samples/freshness/UI and local Markdown work without rewriting history. Reproduced an upstream merge regression: create_app referenced an undefined markdown_storage variable, preventing import. Restored the explicit injection argument expected by new API tests. Added a database-backed Markdown access adapter for FirestoreStore; content already resides in the canonical transaction, so Cloud Run does not depend on ephemeral local files. Local immutable file mirror and tamper checks retained. Added a no-files cloud adapter regression. Integrated tests: 114 Python + 41 Node pass, no skips (two upstream warnings). Media records the prior verified MVP snapshot; its 105/36 counts remain historical evidence, not the new integrated suite total.
+
+Final cloud integration: source 6a27264 deployed to team contextos-00003-8k8 and demo contextos-demo-00003-zrp. Current CI is green (39150725586). Deployed new context-page project/independent review/exact normalized Markdown read/export/fresh-session persistence pass; target synthetic IDs recorded in deployment/verification.md. Verification initially compared an unnormalized template newline, corrected the test to use the reviewed candidate body, and passed without changing application content. Judge live session/extraction/role-denial/logout passes on the latest image; its Knowledge workspace now has two labeled synthetic sample projects. Cleaned the two disposable accounts left by the interruption. Media/pitch committed; latest verification/handoff documentation finalized.
+
+## Teammate storage review and media refresh — 18 October 2026
+
+Reviewed and fast-forwarded d01509d (including 4a62553). Local Knowledge projects now persist in storage/projects.json with immutable Markdown files, shared across local browser/MCP sessions. Missing metadata stays read-only; missing content reads fail rather than fabricating acceptance history. Cloud uses the existing scoped Firestore transaction provider, without local-file fallback. Automatic sample creation was removed; existing judge fixtures remain intact. No blocking correctness/security findings in the reviewed diff. Single-process local storage remains an MVP limitation.
+
+Verification: 125 Python / 42 JavaScript cases pass; repository hygiene passes. GitHub CI for d01509d succeeded (39151822992). Deployed unchanged reviewed source to team revision contextos-00004-d5f and synthetic demo revision contextos-demo-00004-msb. Live create/propose/independent approval/exact read/export/returning-session persistence passed; disposable verification accounts deleted. Public browser Verify all reaches 12/12.
+
+Assessed media impact before rebuilding: no change to the recorded core walkthrough, team access flow or architecture claim. Retained the existing pitch PPTX/PDF and narrated walkthrough. Updated only opening/closing artwork using editable SVGs, a five-role context network, team credits and closing access links. Re-exported exactly 180 seconds with the original narration and reviewed twelve final frames plus the final encoded frame. No app security policy changed.
+
+
+## 2026-10-19 — Merge project storage with private task conversations
+
+Preserved upstream deployment, file/Firestore persistence, Knowledge reader/map,
+sidebar selection and submission assets while connecting approved project pages
+to Work, Overview, Inbox, exports and private conversations. One sidebar picker
+sets the scope; no duplicate picker or new demo setup controls. Local project
+content remains in the shared registry/immutable Markdown; a workspace adapter
+joins it to private SQLite tasks without creating a second content collection.
+Firestore retains one authorized transaction store. Publication enriches its
+existing audit event, and local run freshness is derived from canonical changes
+on read. Task retrieval checks reviewed Markdown integrity. Retained the
+royal-blue/off-white theme, Overview layout, menu fixes and requested padding.
+
+Validation: 140 Python tests pass including real MCP stdio, 59 Node contracts
+pass, all five browser modules parse, governed rehearsal/repository checks pass,
+and the Linux amd64 container builds. Restarted localhost and checked app/assets,
+project scope and the user's three approved pages. Backed up and migrated local
+project records to the merged storage layout without changing their revisions;
+retired samples remain archived. This merge has not been redeployed to Cloud Run.

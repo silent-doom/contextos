@@ -140,3 +140,42 @@ secondary navigation and protected refresh cleanup. Six integration regressions
 added; all 85 Python + 36 Node checks pass locally, including the existing map
 suite. Hosted CI on the correction remains pending; no provider/browser settings
 or backend authorization rules changed.
+
+## Project and presentation update — 2026-10-18
+
+User selected project contextos-512006 and account choudhary.faizan2002@gmail.com. Initial CLI account could not access the project; correct-account login initiated. Sign-in screen and auth errors now use ContextOS product language, with no provider names or setup internals. Deployment/verification status stays truthful in operator documentation.
+
+## CI and cloud follow-up — 18 October
+
+Reviewed latest gemini.md: historical theme suggestions do not override the current integrated team UI; cloud verification remains a real gate. Correct-account Google SDK login succeeded. Both latest main CI runs are green; earlier browser routing failure is fixed upstream and preserved locally. Expanded coverage to include the backend API/MCP suite: 100 Python and 36 Node tests pass, plus hygiene/rehearsal. User authorized full deployment, currently blocked by disabled project billing; asked owner to enable billing. No cloud service exposure or live model verification claimed.
+
+## Live cloud evidence and presentation scope — 18 October
+
+Cloud deployment gate now has real evidence: live Vertex generation, Firestore competing approvals and preserved v1 manifests, plus deployed two-user sessions, independent publication, source staleness/rerun and logout all pass. Existing Gemini theme feedback remains historical; current team UI preserved. Owner clarified MVP scope with polished design. Recording and pitch will label synthetic walkthroughs separately from live verified team functionality.
+
+Cloud browser correction: exact configured PUBLIC_ORIGIN fixes HTTPS termination mismatch while rejecting hostile origins/forwarded-header spoofing. Live verifier now includes Origin and passes after redeployment. Judge member session and scoped synthetic data verified, role switching denied. No Cloud Run error-severity logs found during the deployment check. MVP design scope preserved.
+
+Final presentation checkpoint: preserved latest reviewer file; no new reviewer edits adopted beyond implemented cloud verification. Team supplied as Three-Way Handshake (Faizan Choudhary, Amogh Prabhu, Ankush Bhagat). Completed template-based pitch and three-minute narrated Voila demo, with explicit synthetic/live distinctions and no unsupported performance or production claims. Title contrast fixed in video post-production rather than weakening CSP. Judge member access is separately verified and private.
+
+Late upstream review: caught undefined markdown_storage after team merge, restored injection and kept Firestore authoritative for cloud context bodies. Local file mirror remains available for development. New no-files adapter regression plus complete integration: 114 Python + 41 Node pass. No tests skipped, no reviewer files overwritten.
+
+Final latest-main gate: integrated CI 114 Python + 41 Node tests is green; both cloud services updated. New context-page flow passes against canonical Firestore (create, independent review, exact approved body/export and fresh-session persistence). Judge member and sample projects verified. Complete media committed under deliverables/; no credentials or reviewer edits published.
+
+## Response to d01509d and current reviewer notes — 18 October 2026
+
+Accepted teammate persistence changes after five-axis review, 125 Python / 42 Node tests and live Firestore review/export verification. Cloud deployment remains canonical Firestore; local shared registry is intentionally single-process. Sample auto-seeding removal does not change isolated twelve-case walkthroughs (12/12 verified on the deployed service). gemini.md's existing theme requests are historical and conflict with the subsequently accepted current team design; no theme rollback. Its cloud verification request is fulfilled. Preserved the independent reviewer file.
+
+Media decision: storage plumbing and removal of automatic local samples do not materially change the pitch or recorded workflow. No deck rebuild; capture test counts remain explicitly historical. Refreshed the Voila video's opening and closing only, with original vector artwork, role network, action cards and deployed links. Original narration and walkthrough retained.
+
+
+### 19 October — merge boundary review
+
+Accepted upstream LocalProjects/FirestoreProjects, immutable Markdown, single
+sidebar picker, richer reader/map freshness and existing deployment/media work.
+Reconciled with project-scoped private conversations through one workspace
+adapter, with no second content store or duplicate publication event. Added
+regressions for both storage providers, cross-session publication/private work
+and rejection of externally modified Markdown before model input. Local CI
+commands pass: 140 Python + 59 Node, including optional MCP transport; Linux
+amd64 image builds and restarted app serves the retained three-page project.
+Live deployment remains at the upstream revision until explicitly redeployed.

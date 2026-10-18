@@ -4,9 +4,10 @@
 
 ContextOS is a shared, governed memory workspace for software teams and their AI agents. Keep accepted requirements, architecture decisions, and constraints connected as work moves between Product, Architecture, Development, QA, and Security.
 
-> **Status:** Working local hackathon prototype. Offline rehearsal is the default. Live Gemini, Firebase, Firestore, and Google Cloud deployment require separate verification. This repository does not claim production readiness or measured productivity savings.
+> **Status:** Deployed hackathon MVP with live Gemini on Vertex AI, verified team sessions and Firestore persistence. A separate public walkthrough uses labeled synthetic rehearsal. This is not an enterprise production-readiness claim.
 
-![ContextOS workspace](artifacts/contextos-actions.jpg)
+<img width="1728" height="1000" alt="image" src="https://github.com/user-attachments/assets/bb971d96-c3f8-4f65-a489-aa39d41b91df" />
+
 
 ## Why ContextOS?
 
@@ -18,6 +19,12 @@ A requirement should survive the handoff from a product conversation to implemen
 - **Inspectable behavior:** Review comparisons, history, attributable audit events, and separate estimates/provider usage.
 - **Connected project work:** Knowledge, Inbox, Overview and agent tasks use the same approved project pages. Private saved conversations support follow-ups, exact per-turn sources, safe retries and explicit context refresh.
 - **Interactive demo:** Five personas and twelve step-by-step walkthroughs with Next/Back, captured checkpoints, and a step activity log.
+
+## Hosted MVP
+
+- [Team workspace](https://contextos-443743777956.asia-south1.run.app) — provisioned member sign-in.
+- [Public walkthrough](https://contextos-demo-443743777956.asia-south1.run.app) — synthetic data, live AI disabled.
+- [Deployment evidence and recovery](deployment/verification.md). Judge credentials are shared privately.
 
 ## Quick start
 
@@ -75,11 +82,16 @@ The activity view/export returns the latest 100 visible events. It is a prototyp
 
 The UI uses royal-blue accents and navigation, an off-white background, and white cards, retaining the typography from commit `4e1bd51`, the CTA-focused layout, and guided walkthroughs. Fonts load from Google Fonts, with system fallbacks when offline. Historical design references remain in `design_revamp/`.
 
+## Hackathon media
+
+The [deliverables folder](deliverables/README.md) contains the three-minute narrated demo and editable landscape pitch/PDF with SWOT, architecture and verification evidence. Judge credentials remain private.
+
 ## Development checks
 
-From the repository root:
+From the repository root (the full Python API/MCP suite needs its pinned test dependency):
 
 ```sh
+.venv/bin/python -m pip install -r backend/mcp/requirements.txt -c requirements.txt
 .venv/bin/pytest -q
 node --check web/app.js
 node --check web/auth.js
@@ -147,3 +159,5 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before making changes. Keep synthetic de
 ## License
 
 A distribution license has **not yet been selected**. No open-source license grant is implied. The project owner should choose and add an appropriate `LICENSE` before public release.
+
+Local Knowledge projects now persist under ignored storage/projects.json and storage/projects/, shared by local browser/MCP sessions. Projects are created explicitly; missing metadata requires recovery before edits. Hosted workspaces keep project content in Firestore. See [storage guide](storage/README.md). The reviewed d01509d build is deployed to both hosted MVP URLs; submission media remain under [deliverables](deliverables/README.md).

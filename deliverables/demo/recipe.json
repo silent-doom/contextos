@@ -1,0 +1,363 @@
+{
+  "tool": "voila",
+  "spec": "voila-recipe/1",
+  "url": "https://contextos-demo-443743777956.asia-south1.run.app",
+  "mode": "steps",
+  "steps": [
+    {
+      "action": "slide",
+      "title": "ContextOS",
+      "subtitle": "Shared decisions. Traceable work. | Three-Way Handshake",
+      "accent": "#2547D0",
+      "caption": "ContextOS · Hackathon MVP",
+      "narration": "ContextOS keeps a software team and its AI agents working from the same accepted decisions."
+    },
+    {
+      "action": "goto",
+      "url": "https://contextos-demo-443743777956.asia-south1.run.app/#overview",
+      "caption": "A project overview with clear next actions",
+      "narration": "Teams see accepted knowledge, pending reviews, affected work, and the next useful action in one workspace."
+    },
+    {
+      "action": "click",
+      "selector": "#secondary-nav a[href=\"#demo\"]",
+      "caption": "Synthetic walkthrough · no live model calls in this recording",
+      "narration": "This public walkthrough uses synthetic data. The separate protected team service has verified live Gemini and shared storage."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-run\"][data-id=\"handoff\"]",
+      "caption": "1 · Product intent becomes accepted knowledge",
+      "narration": "We start with product intent. The requirement has an owner, an identifier, and an accepted revision."
+    },
+    {
+      "action": "zoom",
+      "selector": ".demo-stage",
+      "level": 1.15,
+      "caption": "Inspect each checkpoint, one action at a time",
+      "narration": "Each checkpoint reveals the acting persona and the exact decision available at that moment."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-next\"]",
+      "caption": "2 · Architecture uses the same requirement",
+      "narration": "The architect receives that accepted requirement without relying on someone else’s private conversation."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-next\"]",
+      "caption": "3 · Development keeps the original intent",
+      "narration": "Development works from the same revision, with exact sources that can be inspected."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-next\"]",
+      "caption": "4 · QA checks the same contract",
+      "narration": "QA receives the same requirement, keeping acceptance checks connected to the product decision."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-finish\"]",
+      "caption": "One decision survives the handoff",
+      "narration": "The requirement survives the handoff across product, architecture, development, and quality."
+    },
+    {
+      "action": "zoom",
+      "level": 1,
+      "caption": "Publication needs an independent owner",
+      "narration": "Shared memory also needs governance. A suggestion must never silently become an accepted decision."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-select\"][data-id=\"review\"]",
+      "caption": "Review a proposed architecture change",
+      "narration": "Here, a developer proposes a change to the retry design."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-run\"][data-id=\"review\"]",
+      "caption": "The proposal starts pending",
+      "narration": "The proposal records its source and reason, while accepted knowledge remains unchanged."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-next\"]",
+      "caption": "Self-approval is blocked",
+      "narration": "The author cannot approve the proposal. The application enforces that boundary before publication."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-next\"]",
+      "caption": "The architect reviews the exact proposal",
+      "narration": "An independent architect reviews the exact proposal, including its content hash and accepted base revision."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-next\"]",
+      "caption": "Publication creates a new revision",
+      "narration": "Publication creates a new accepted revision and records who made the decision."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-finish\"]",
+      "caption": "Review evidence stays inspectable",
+      "narration": "The completed walkthrough preserves the decision evidence for inspection."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-select\"][data-id=\"impact\"]",
+      "caption": "A changed decision flags affected work",
+      "narration": "Now change the retry limit. Existing work must know that its source changed."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-run\"][data-id=\"impact\"]",
+      "caption": "Keep the original source snapshot",
+      "narration": "The original run keeps its source snapshot, so its earlier answer remains explainable."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-next\"]",
+      "caption": "The owner publishes the revised constraint",
+      "narration": "After independent publication, ContextOS flags the work affected by the changed decision."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-next\"]",
+      "caption": "Refresh against accepted revision two",
+      "narration": "QA refreshes against the new revision. The old run remains intact for comparison."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-finish\"]",
+      "caption": "History is preserved, not overwritten",
+      "narration": "A refresh updates the working context without rewriting the evidence of earlier work."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-select\"][data-id=\"restricted\"]",
+      "caption": "Security follows the context",
+      "narration": "Finally, the security case shows that shared knowledge still respects role boundaries."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-run\"][data-id=\"restricted\"]",
+      "caption": "Security can inspect restricted findings",
+      "narration": "The security persona can inspect explicitly restricted context within its authorized scope."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-next\"]",
+      "caption": "Other roles cannot retrieve restricted context",
+      "narration": "A developer cannot retrieve those restricted findings. Permissions are checked before context assembly."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-next\"]",
+      "caption": "Derived task output is protected too",
+      "narration": "The boundary also applies to derived task output, rather than hiding only the original document."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-next\"]",
+      "caption": "Activity respects the same access boundary",
+      "narration": "Related activity is filtered too, so the audit view does not leak restricted knowledge."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-finish\"]",
+      "caption": "Five personas · one governed workspace",
+      "narration": "Every persona can act within its scope, with visible outcomes and clear ownership."
+    },
+    {
+      "action": "scroll",
+      "y": 0,
+      "caption": "Twelve repeatable cases for judges to explore",
+      "narration": "The full walkthrough catalog covers conflicts, rollback, rejection, context budgets, attribution, and honest usage reporting."
+    },
+    {
+      "action": "click",
+      "selector": "button[data-action=\"demo-all\"]",
+      "caption": "Verify all twelve cases",
+      "narration": "Judges can repeat every case, then use a private member login to test the live team workflow."
+    },
+    {
+      "action": "zoom",
+      "level": 1,
+      "caption": "A working MVP on Google Cloud",
+      "narration": "The team service runs on Cloud Run with Firestore and live Gemini on Vertex AI."
+    },
+    {
+      "action": "slide",
+      "title": "Keep decisions connected to work",
+      "subtitle": "ContextOS | Three-Way Handshake | Explore the hosted MVP",
+      "accent": "#2547D0",
+      "caption": "ContextOS · Shared knowledge with ownership and evidence",
+      "narration": "ContextOS makes accepted decisions reusable, changes visible, and agent work traceable. Explore the MVP and inspect the evidence."
+    }
+  ],
+  "durationSec": 180,
+  "segments": [
+    {
+      "at": 0.52,
+      "caption": "ContextOS · Hackathon MVP",
+      "narration": "ContextOS keeps a software team and its AI agents working from the same accepted decisions."
+    },
+    {
+      "at": 7.58,
+      "caption": "A project overview with clear next actions",
+      "narration": "Teams see accepted knowledge, pending reviews, affected work, and the next useful action in one workspace."
+    },
+    {
+      "at": 13.96,
+      "caption": "Synthetic walkthrough · no live model calls in this recording",
+      "narration": "This public walkthrough uses synthetic data. The separate protected team service has verified live Gemini and shared storage."
+    },
+    {
+      "at": 21.67,
+      "caption": "1 · Product intent becomes accepted knowledge",
+      "narration": "We start with product intent. The requirement has an owner, an identifier, and an accepted revision."
+    },
+    {
+      "at": 27.62,
+      "caption": "Inspect each checkpoint, one action at a time",
+      "narration": "Each checkpoint reveals the acting persona and the exact decision available at that moment."
+    },
+    {
+      "at": 33,
+      "caption": "2 · Architecture uses the same requirement",
+      "narration": "The architect receives that accepted requirement without relying on someone else’s private conversation."
+    },
+    {
+      "at": 39.08,
+      "caption": "3 · Development keeps the original intent",
+      "narration": "Development works from the same revision, with exact sources that can be inspected."
+    },
+    {
+      "at": 43.94,
+      "caption": "4 · QA checks the same contract",
+      "narration": "QA receives the same requirement, keeping acceptance checks connected to the product decision."
+    },
+    {
+      "at": 49.41,
+      "caption": "One decision survives the handoff",
+      "narration": "The requirement survives the handoff across product, architecture, development, and quality."
+    },
+    {
+      "at": 54.82,
+      "caption": "Publication needs an independent owner",
+      "narration": "Shared memory also needs governance. A suggestion must never silently become an accepted decision."
+    },
+    {
+      "at": 61.01,
+      "caption": "Review a proposed architecture change",
+      "narration": "Here, a developer proposes a change to the retry design."
+    },
+    {
+      "at": 64.67,
+      "caption": "The proposal starts pending",
+      "narration": "The proposal records its source and reason, while accepted knowledge remains unchanged."
+    },
+    {
+      "at": 69.87,
+      "caption": "Self-approval is blocked",
+      "narration": "The author cannot approve the proposal. The application enforces that boundary before publication."
+    },
+    {
+      "at": 76.01,
+      "caption": "The architect reviews the exact proposal",
+      "narration": "An independent architect reviews the exact proposal, including its content hash and accepted base revision."
+    },
+    {
+      "at": 82.59,
+      "caption": "Publication creates a new revision",
+      "narration": "Publication creates a new accepted revision and records who made the decision."
+    },
+    {
+      "at": 87.61,
+      "caption": "Review evidence stays inspectable",
+      "narration": "The completed walkthrough preserves the decision evidence for inspection."
+    },
+    {
+      "at": 91.82,
+      "caption": "A changed decision flags affected work",
+      "narration": "Now change the retry limit. Existing work must know that its source changed."
+    },
+    {
+      "at": 96.44,
+      "caption": "Keep the original source snapshot",
+      "narration": "The original run keeps its source snapshot, so its earlier answer remains explainable."
+    },
+    {
+      "at": 101.57,
+      "caption": "The owner publishes the revised constraint",
+      "narration": "After independent publication, ContextOS flags the work affected by the changed decision."
+    },
+    {
+      "at": 107.36,
+      "caption": "Refresh against accepted revision two",
+      "narration": "QA refreshes against the new revision. The old run remains intact for comparison."
+    },
+    {
+      "at": 112.71,
+      "caption": "History is preserved, not overwritten",
+      "narration": "A refresh updates the working context without rewriting the evidence of earlier work."
+    },
+    {
+      "at": 117.74,
+      "caption": "Security follows the context",
+      "narration": "Finally, the security case shows that shared knowledge still respects role boundaries."
+    },
+    {
+      "at": 122.72,
+      "caption": "Security can inspect restricted findings",
+      "narration": "The security persona can inspect explicitly restricted context within its authorized scope."
+    },
+    {
+      "at": 128.34,
+      "caption": "Other roles cannot retrieve restricted context",
+      "narration": "A developer cannot retrieve those restricted findings. Permissions are checked before context assembly."
+    },
+    {
+      "at": 134.42,
+      "caption": "Derived task output is protected too",
+      "narration": "The boundary also applies to derived task output, rather than hiding only the original document."
+    },
+    {
+      "at": 140.35,
+      "caption": "Activity respects the same access boundary",
+      "narration": "Related activity is filtered too, so the audit view does not leak restricted knowledge."
+    },
+    {
+      "at": 145.35,
+      "caption": "Five personas · one governed workspace",
+      "narration": "Every persona can act within its scope, with visible outcomes and clear ownership."
+    },
+    {
+      "at": 150.18,
+      "caption": "Twelve repeatable cases for judges to explore",
+      "narration": "The full walkthrough catalog covers conflicts, rollback, rejection, context budgets, attribution, and honest usage reporting."
+    },
+    {
+      "at": 157.53,
+      "caption": "Verify all twelve cases",
+      "narration": "Judges can repeat every case, then use a private member login to test the live team workflow."
+    },
+    {
+      "at": 163.15,
+      "caption": "A working MVP on Google Cloud",
+      "narration": "The team service runs on Cloud Run with Firestore and live Gemini on Vertex AI."
+    },
+    {
+      "at": 168.61,
+      "caption": "ContextOS · Shared knowledge with ownership and evidence",
+      "narration": "ContextOS makes accepted decisions reusable, changes visible, and agent work traceable. Explore the MVP and inspect the evidence."
+    }
+  ],
+  "howToRecreate": "Run the steps against the url with voila (github.com/anzal1/voila) — voila_record(url, steps_yaml) via MCP, or `voila record <url> --steps <file>`.",
+  "postProcess": {
+    "durationSec": 180,
+    "playbackRate": 1.1644444444444444,
+    "titleCards": "Original vector opening and closing artwork overlaid after Voila frame review; walkthrough and narration preserved"
+  }
+}

@@ -8,12 +8,16 @@ from fastapi.testclient import TestClient
 from backend.ai import AI
 from backend.app import create_app
 from backend.store import SQLiteStore
+from backend.data.storage import MarkdownStorage
+from backend.data.projects import FirestoreProjects
 
 
-@pytest.fixture
-def client(tmp_path, monkeypatch):
+@pytest.fixture(params=['local', 'unified'])
+def client(tmp_path, monkeypatch, request):
     monkeypatch.setenv('AUTH_MODE', 'demo')
-    return TestClient(create_app(SQLiteStore(tmp_path / 'handoff.db'), AI(mode='offline')),
+    store = SQLiteStore(tmp_path / 'handoff.db')
+    return TestClient(create_app(store, AI(mode='offline'), markdown_storage=MarkdownStorage(tmp_path / 'storage'),
+                                 project_store=FirestoreProjects(store) if request.param == 'unified' else None),
                       headers={'x-contextos-client': 'workspace'})
 
 
@@ -100,9 +104,10 @@ def test_projects_do_not_mix_sources_runs_usage_or_exports(client):
         assert not data['usage']
     assert client.post('/api/tasks', json={'query': 'Payment retries', 'project_id': 'missing'}).status_code == 404
     assert client.get('/api/workspace?project_id=missing').status_code == 404
-    # Another isolated workspace cannot address a known project ID.
+    # Local demo sessions share projects; unified storage scopes them by workspace.
     stranger = TestClient(client.app, headers=client.headers)
-    assert stranger.get(f'{base}/contexts').status_code == 404
+    assert stranger.get(f'{base}/contexts').status_code == (404 if client.app.state.work_store.unified else 200)
+    assert stranger.get('/api/workspace', params={'project_id': pid}).json().get('tasks', []) == []
 
 
 def test_new_security_constraint_flags_prior_work_and_requires_explicit_refresh(client):
@@ -123,7 +128,9 @@ def test_new_security_constraint_flags_prior_work_and_requires_explicit_refresh(
     assert refreshed['status'] == 'succeeded' and not refreshed['stale']
     assert refreshed['manifest']['history_turn_ids'] == []
     assert any(s['id'] == security['id'] and s['revision'] == 2 for s in refreshed['manifest']['sources'])
-    reopened = TestClient(create_app(client.app.state.store, AI(mode='offline')), headers=client.headers, cookies=client.cookies)
+    reopened = TestClient(create_app(client.app.state.store, AI(mode='offline'),
+                                    markdown_storage=client.app.state.markdown_storage,
+                                    project_store=client.app.state.project_store), headers=client.headers, cookies=client.cookies)
     assert reopened.get(f"/api/conversations/{chat['id']}").json()['turns'][0]['manifest'] == original
     assert client.post(path, json={'query': 'Different project?', 'budget': 6000, 'request_id': 'turn-project-third', 'project_id': 'wrong'}).status_code == 409
 
@@ -172,3 +179,43 @@ def test_mandatory_project_rule_keeps_its_dependency_even_without_query_overlap(
     result = client.post('/api/assemble', json={'query': 'Unrelated question', 'budget': 6000, 'project_id': pid})
     assert result.status_code == 200, result.text
     assert arc['id'] in {s['id'] for s in result.json()['sources']}
+
+
+def test_shared_local_review_invalidates_private_work_without_copying_project_content(tmp_path, monkeypatch):
+    monkeypatch.setenv('AUTH_MODE', 'demo')
+    store = SQLiteStore(tmp_path / 'shared.db')
+    app = create_app(store, AI(mode='offline'), markdown_storage=MarkdownStorage(tmp_path / 'storage'))
+    first = TestClient(app, headers={'x-contextos-client': 'workspace'})
+    pid, base = setup(first)
+    chat = first.post('/api/conversations', json={'title': 'Private retry work', 'request_id': 'shared-create-chat', 'project_id': pid}).json()
+    path = f"/api/conversations/{chat['id']}/turns"
+    turn = first.post(path, json={'query': 'Implement payment retries', 'request_id': 'shared-first-turn'}).json()
+    assert turn['status'] == 'succeeded'
+    second = TestClient(app, headers=first.headers)
+    security = next(c for c in snapshot(second, pid)['contexts'] if c['domain'] == 'Security')
+    proposal = propose_change(second, base, security['id'], 'Redact provider trace IDs.')
+    assert approve(second, base, proposal, 'security').status_code == 200
+    assert second.get(f"/api/conversations/{chat['id']}").status_code == 404
+    changed = first.get(f"/api/conversations/{chat['id']}").json()['turns'][0]
+    assert changed['stale'] and changed['manifest'] == turn['manifest']
+    assert any(c['mandatory'] and c['context_id'] == security['id'] for c in changed['context_changes'])
+    assert first.post(path, json={'query': 'Continue the task', 'request_id': 'shared-next-turn'}).status_code == 409
+    raw = store.read(first.cookies['contextos_session'])
+    assert pid not in raw.get('context_projects', {})
+    assert not raw['tasks'][turn['id']]['stale']  # Derived across stores, not a second publication write.
+    events = first.get(base + '/activity').json()
+    matches = [e for e in events if e.get('proposal_id') == proposal['id'] and e['action'] == 'proposal_approved']
+    assert len(matches) == 1 and matches[0]['actor'] == 'demo-security'
+
+
+def test_local_model_input_verifies_the_reviewed_markdown_file(tmp_path, monkeypatch):
+    monkeypatch.setenv('AUTH_MODE', 'demo')
+    root = tmp_path / 'storage'
+    client = TestClient(create_app(SQLiteStore(tmp_path / 'files.db'), AI(mode='offline'),
+                                   markdown_storage=MarkdownStorage(root)), headers={'x-contextos-client': 'workspace'})
+    pid, base = setup(client)
+    source = next(root.glob(f'projects/{pid}/contexts/*/versions/*.md'))
+    source.write_text('Unreviewed external replacement', encoding='utf-8')
+    response = client.post('/api/tasks', json={'query': 'Implement retries', 'project_id': pid})
+    assert response.status_code == 409 and 'reviewed version' in response.json()['detail']
+    assert not client.app.state.store.read(client.cookies['contextos_session'])['usage']

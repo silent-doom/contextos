@@ -9,6 +9,7 @@ from backend.ai import AI
 from backend.app import create_app
 from backend.domain import empty_workspace
 from backend.store import SQLiteStore
+from backend.data.storage import MarkdownStorage
 from scripts import verify_collaboration as verifier
 
 
@@ -34,7 +35,7 @@ def collaboration(tmp_path, monkeypatch):
     monkeypatch.setattr(auth, 'verify_session_cookie', verified)
     monkeypatch.setattr(auth, 'create_session_cookie', lambda token, expires_in: f'session-{token}')
     store = SQLiteStore(tmp_path / 'collaboration.db', initializer=empty_workspace)
-    app = create_app(store, AI(mode='offline'))
+    app = create_app(store, AI(mode='offline'), markdown_storage=MarkdownStorage(tmp_path / 'storage'))
     return lambda: TestClient(app), members, store
 
 

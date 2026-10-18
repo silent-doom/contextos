@@ -22,7 +22,7 @@ def conversation(state, cid, actor, role):
 
 
 def stale(state, turn):
-    return pc.stale(state, turn)
+    return pc.freshness(state, turn)['stale']
 
 
 class ConversationService:
@@ -55,7 +55,7 @@ class ConversationService:
     def get(self, workspace, cid, actor, role):
         state = self.store.read(workspace)
         item = deepcopy(conversation(state, cid, actor, role))
-        item['turns'] = [deepcopy(state['tasks'][tid]) for tid in item['turn_ids']]
+        item['turns'] = [pc.freshness(state, state['tasks'][tid]) for tid in item['turn_ids']]
         return item
 
     def list(self, workspace, actor, role):

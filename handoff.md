@@ -176,3 +176,42 @@ real page/map scripts and model location/history; six integration cases added.
 cases and syntax checks. No browser setting is required. Original PR #6 is
 already merged, so hosted verification needs the fix pushed and a follow-up PR
 or an appropriate workflow run. No new live-provider/visual/container evidence.
+
+Cloud target now selected: contextos-512006; owning Google account choudhary.faizan2002@gmail.com. Prior account choudharyfaizan15@gmail.com lacked project access. gcloud auth login has opened browser authorization; complete with the selected account, then recheck access/services/Firebase/Firestore/billing before provisioning. User-facing auth copy must be provider-neutral; operational docs retain exact provider configuration.
+
+Latest cloud target/account note above supersedes historical cloud-deferral entries: checking contextos-512006 under choudhary.faizan2002@gmail.com, pending Google browser authorization. Team remote UI/conversation/context-page work through 67c891a is integrated.
+
+## Current checkpoint — 18 October CI and cloud deployment
+
+Google SDK login and project lookup succeeded with choudhary.faizan2002@gmail.com. User explicitly requested end-to-end Google Cloud deployment. Billing is disabled on contextos-512006; user has been asked to enable it. Firestore API is currently disabled. Do not claim deployed/authenticated cloud functionality yet. Latest remote main 4f53d20 has green CI; preserve its Knowledge routing and browser regression fixes. Integrated validation: 100 Python + 36 Node tests, hygiene and rehearsal pass. Expanded CI discovers API/MCP tests and installs their pinned dependency. Reviewer gemini.md remains independently edited; provider branding stays out of product UI.
+
+## Active checkpoint — deployed MVP and media
+
+Billing enabled. Team URL https://contextos-443743777956.asia-south1.run.app (live Vertex, protected member sessions, Firestore); public synthetic URL https://contextos-demo-443743777956.asia-south1.run.app (AI offline). Both deployed with exact PUBLIC_ORIGIN after browser found HTTPS proxy rejection. 105 Python + 36 Node tests pass; full two-user deployed flow with Origin and separate judge member access pass. See deployment/verification.md. User explicitly approved own member account, two disposable verifier accounts, disabled public signup, separate public synthetic demo, and judge member account/workspace. Passwords remain only in ignored mode-0600 .data/cloud-access.txt and .data/judge-access.txt. Never stage them. Team is Three-Way Handshake: Faizan Choudhary, Amogh Prabhu, Ankush Bhagat. User clarified production-ready is a design direction; this is an MVP. Narrated Voila MP4 and template-based landscape PPTX/PDF are being prepared under deliverables/; recording sources there, raw build files under ignored .data/. Must finish recording, review frames, finalize deck/PDF checks, and commit outputs/logs. gemini.md and .agents remain independent/untracked.
+
+## Latest completed checkpoint — submission outputs
+
+Deployment and judge member access are verified, including live extraction to a pending proposal. CI 0581757 passed. Final media: deliverables/demo/ContextOS-Demo.mp4 (180.00 s, narrated/captioned, reviewed), deliverables/pitch/ContextOS-Pitch.pptx and .pdf (14 landscape slides, official event template adapted, SWOT/architecture/team included, PDF <5 MB). Prompt with URL, YAML, embedded/standalone recipe, media review and authoring sources are saved alongside. Local .data/ holds raw frames, private validation reports and credentials; do not commit it. No public video-host upload or portal submission was performed. User scope is hackathon MVP with professional design. Independent gemini.md and .agents edits remain excluded.
+
+Late upstream integration: media commit dcc030e could not push until incorporating new team main 59dceaa. Merge preserved. Fixed upstream undefined markdown_storage startup wiring and selected canonical workspace Markdown reads for Firestore; local file adapter retained. 114 Python + 41 Node tests pass. Need redeploy this integrated version, verify new context-page project/review/read path, then push final commits. Media represents the preceding verified snapshot; avoid rewriting or deleting completed outputs.
+
+## Final checkpoint — 18 October 2026
+
+Latest main 6a27264 is pushed and green in CI (39150725586); team contextos-00003-8k8 and demo contextos-demo-00003-zrp deployed. New shared-knowledge project/review/read/export/fresh-session path is verified against canonical Firestore, and judge member login/extraction/permissions/logout pass. Both temporary accounts and interruption leftovers cleaned up. judges-mvp includes the team's two labeled sample projects for immediate Knowledge exploration. All requested MP4/PPTX/PDF/prompt/recipe sources are saved and committed under deliverables/. Final narration video is exactly 180 seconds; pitch PDF is 443420 bytes and 14 landscape pages. Private credentials remain only in .data/; independent gemini.md and .agents remain uncommitted. Owner still needs to publish the MP4 to the permitted video host and submit the actual portal form. No deployment/media work remains outstanding in this slice.
+
+## d01509d review, deployment and media checkpoint — 18 October 2026
+
+User requested review/deployment of teammate commit d01509d, conditional media rebuild and more creative first/last video frames, followed by GitHub push excluding unwanted files. Reviewed/fast-forwarded with no blocking findings. Tests: 125 Python, 42 Node; CI d01509d successful. Team deployed contextos-00004-d5f; demo contextos-demo-00004-msb. Live new-context independent review/export/persistence passed; disposable accounts deleted. Public twelve-case browser verification passes.
+
+Deck intentionally unchanged: changes concern local persistence, no new product claim or recorded scenario. MP4 refreshed only at opening/closing using deliverables/demo/opening.svg and closing.svg (original artwork); source title-cards.cjs and finalize.cjs included. Exact three-minute narration/walkthrough retained, twelve frames and final frame reviewed. See deliverables/demo/review.md. Credentials/private runtime data and independent gemini.md/.agents are excluded from this push. No additional cloud resource provisioning or schema migration required.
+
+
+19 October merge checkpoint: preserve both upstream and private-conversation
+work. ProjectWorkspaceStore joins local shared project knowledge to private task
+state without copying canonical content; Firestore remains a unified transaction.
+The sidebar selector scopes all views, and publication has one enriched project
+audit event. Local stale warnings are derived on read. Tests isolate their
+storage from real projects. 140 Python tests (including MCP stdio), 59 Node
+contracts, JavaScript syntax, repository/rehearsal checks and Linux amd64 image
+build pass. Local app restarted at http://127.0.0.1:8000 with existing approved
+pages retained. No new cloud deployment or submission-media regeneration.

@@ -2,7 +2,24 @@
 
 ## Current verification boundary
 
-The application runs locally with SQLite and explicit offline rehearsal. Gemini, Firebase, and Firestore adapters exist but require live project configuration and verification. No cloud deployment or live Google AI result is claimed. GitHub is configured at silent-doom/contextos. Selected stack: Firebase Auth + Firestore + Cloud Run.
+The hackathon MVP is deployed on Cloud Run with verified team sessions, Firestore storage and live Vertex AI. Local SQLite/offline rehearsal remains available. See the dated deployment evidence below; this is not a production-readiness certification. GitHub is configured at silent-doom/contextos. Selected stack: Firebase Auth + Firestore + Cloud Run.
+
+## Selected target
+
+- Project: `contextos-512006`.
+- Operator account: `choudhary.faizan2002@gmail.com` (selected by owner).
+- CLI sign-in initiated using the normal browser flow. Initial lookup from the other locally active account was denied; correct-account access must be rechecked after authorization completes.
+- No APIs, billing, IAM grants, database, public exposure or deployment changed during this access check.
+
+For an explicit target check after signing in:
+
+```sh
+gcloud projects describe contextos-512006 --account choudhary.faizan2002@gmail.com
+gcloud services list --enabled --project contextos-512006 --account choudhary.faizan2002@gmail.com
+gcloud firestore databases list --project contextos-512006 --account choudhary.faizan2002@gmail.com
+```
+
+Select the database location only after inspecting existing resources; existing Firestore location is not changed casually. Default CLI settings are not a substitute for passing the selected project/account explicitly.
 
 ## Local configuration
 
@@ -140,3 +157,7 @@ After Firestore Native mode, ADC and IAM are configured, run:
 ```
 
 This explicitly creates and retains a separately named synthetic verification workspace. It checks two clients/recreated client visibility, competing approvals and preserved stale snapshots. It is also usable with a configured Firestore emulator. The script has not been run against a live project here; it does not prove deployed multi-instance behavior or backups/restoration. Record its workspace ID and clean up according to the selected environment's retention policy.
+
+## Verified hosted MVP
+
+Current URLs, access scope, resources, test evidence and rollback guidance are recorded in [deployment/verification.md](deployment/verification.md). Historical setup notes above describe the initial prerequisites. PUBLIC_ORIGIN must equal the advertised external HTTPS origin; otherwise a hosting proxy can cause legitimate browser writes to be rejected. Use scripts/deploy_cloud_run.sh for the provisioned team service.

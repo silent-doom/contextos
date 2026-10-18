@@ -188,3 +188,23 @@ def test_inspection_logs_enforce_visibility_and_do_not_leak_restricted_work(clie
     assert client.post('/api/activity',json={'action':'approved_anything','target_id':'ARC-001'}).status_code==422
     exported = client.get('/api/export').json()
     assert exported['events'][0]['action']=='Evidence exported'
+
+
+def test_public_origin_supports_https_proxy_without_trusting_forwarded_headers(tmp_path, monkeypatch):
+    monkeypatch.setenv('AUTH_MODE', 'demo')
+    monkeypatch.setenv('PUBLIC_ORIGIN', 'https://contextos.example')
+    c = TestClient(create_app(SQLiteStore(tmp_path / 'proxy.db'), AI(mode='offline')),
+                   headers={'x-contextos-client': 'workspace'})
+    assert c.post('/api/persona', json={'role': 'qa'},
+                  headers={'origin': 'https://contextos.example'}).status_code == 200
+    for origin in ('https://evil.example', 'http://contextos.example', 'http://testserver', 'null'):
+        assert c.post('/api/persona', json={'role': 'pm'}, headers={
+            'origin': origin, 'x-forwarded-host': 'evil.example',
+            'x-forwarded-proto': 'https'}).status_code == 403
+
+
+@pytest.mark.parametrize('origin', ['https://example.com/path', 'https://user@example.com', 'https://example.com?x=1', 'null'])
+def test_invalid_public_origin_fails_at_startup(tmp_path, monkeypatch, origin):
+    monkeypatch.setenv('PUBLIC_ORIGIN', origin)
+    with pytest.raises(RuntimeError, match='PUBLIC_ORIGIN'):
+        create_app(SQLiteStore(tmp_path / 'invalid-origin.db'), AI(mode='offline'))

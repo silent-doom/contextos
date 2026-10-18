@@ -22,7 +22,7 @@ def contexts(state, project_id=None):
         # Project-wide requirements and security guardrails are deterministic,
         # rather than depending on a similarity score to reach the model.
         'mandatory': doc['owner_type'] in ('pm', 'security'),
-        'dependencies': list(doc['dependency_versions']), 'revision': doc['version'],
+        'dependencies': [link['target_id'] for link in doc['relationships']], 'revision': doc['version'],
         'status': 'accepted', 'freshness': pages.status(project, doc)['status'],
         'sources': [doc['filename']], 'updated_at': doc['updated_at'],
         'history': [{'revision': h['version'], 'body': h['content'],
@@ -52,11 +52,19 @@ def view(state, project_id=None):
             'sources': [p['candidate']['filename']],
             'reviewer': p.get('reviewed_by'),
         }
+    tasks = {key: freshness(state, run) for key, run in state['tasks'].items()
+             if run.get('project_id') == project_id}
+    events = [e for e in state['events'] if e.get('project_id') == project_id]
+    # Service-level project events also contain compact lifecycle records. Only
+    # attributed domain events belong in the workspace timeline.
+    events += [{**e, 'action': e.get('workspace_action', e['action'])}
+               for e in project['events'] if 'context_id' in e]
+    events = list({e['id']: e for e in events}.values())
     return {**state, 'project': pages.metadata(project),
             'contexts': contexts(state, project_id), 'proposals': proposals,
-            'tasks': {k: v for k, v in state['tasks'].items() if v.get('project_id') == project_id},
+            'tasks': tasks,
             'conversations': {k: v for k, v in state.get('conversations', {}).items() if v.get('project_id') == project_id},
-            'events': [e for e in state['events'] if e.get('project_id') == project_id],
+            'events': sorted(events, key=lambda e: e['at']),
             'usage': [u for u in state['usage'] if u.get('project_id') == project_id]}
 
 
@@ -84,11 +92,45 @@ def stale(state, run):
         for s in run['manifest']['sources'])
 
 
+def freshness(state, run):
+    """Derive warnings across local task/project stores without dual writes."""
+    result = deepcopy(run)
+    result['stale'] = stale(state, run)
+    if not run.get('project_id'):
+        return result
+    project = pages.project(state, run['project_id'])
+    accepted = contexts(state, run['project_id'])
+    used = {s['id'] for s in run['manifest']['sources']} | set(run['manifest'].get('history_source_ids', []))
+    changes = result.setdefault('context_changes', [])
+    for event in project['events']:
+        change = event.get('change')
+        if not change or event['at'] <= run['created_at']:
+            continue
+        affected = d.affected_contexts({'contexts': accepted}, change['context_id'])
+        if change['mandatory'] or used & affected:
+            result['stale'] = True
+            if change not in changes:
+                changes.append(deepcopy(change))
+    return result
+
+
+def project_audit(project, actor, role, action, detail, **fields):
+    events = []
+    d.audit({'events': events}, actor, action, None, detail,
+            role=role, project_id=project['id'])
+    # Enrich the canonical service event instead of logging publication twice.
+    event = project['events'][-1]
+    service_action = event['action']
+    event.update(events[0], **fields, workspace_action=action)
+    event['action'] = service_action
+
+
 def propose(state, project_id, actor, role, action, data, context_id=None):
-    result = pages.propose(pages.project(state, project_id), actor, action, data, context_id)
-    d.audit(state, actor, 'Context change proposed', None,
+    project = pages.project(state, project_id)
+    result = pages.propose(project, actor, action, data, context_id)
+    project_audit(project, actor, role, 'Context change proposed',
             f"{pages.context_name(result['candidate'])} · {result['reason']}",
-            role=role, project_id=project_id)
+            proposal_id=result['id'])
     return result
 
 
@@ -101,7 +143,7 @@ def review(state, project_id, actor, role, proposal_id, data):
         # A newly added/changed mandatory rule can affect work that did not
         # previously know it existed. Warn conservatively within this project.
         mandatory = result['candidate']['owner_type'] in ('pm', 'security')
-        for run in state['tasks'].values():
+        for run in state.get('tasks', {}).values():
             if run.get('project_id') != project_id:
                 continue
             used = {s['id'] for s in run['manifest']['sources']} | set(run['manifest'].get('history_source_ids', []))
@@ -111,8 +153,12 @@ def review(state, project_id, actor, role, proposal_id, data):
                     'context_id': result['context_id'], 'title': pages.context_name(result['candidate']),
                     'revision': result['published_version'], 'reason': result['reason'],
                     'mandatory': mandatory, 'action': result['action']})
-    d.audit(state, actor, 'Context revision published' if result['status'] == 'approved' else 'Proposal rejected',
-            None, f"{pages.context_name(result['candidate'])} · proposed by {result['author']} · "
+    project_audit(project, actor, role, 'Context revision published' if result['status'] == 'approved' else 'Proposal rejected',
+            f"{pages.context_name(result['candidate'])} · proposed by {result['author']} · "
                   + (f"v{result['published_version']} · " if result['status'] == 'approved' else '') + result['reason'],
-            role=role, project_id=project_id)
+            proposal_id=result['id'], change={
+                'context_id': result['context_id'], 'title': pages.context_name(result['candidate']),
+                'revision': result.get('published_version'), 'reason': result['reason'],
+                'mandatory': result['candidate']['owner_type'] in ('pm', 'security'),
+                'action': result['action']} if result['status'] == 'approved' else None)
     return result

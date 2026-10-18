@@ -128,3 +128,23 @@ The default Python suite passes all 85 cases with the two existing warnings;
 rehearsal, repository hygiene, served-asset and diff checks pass. Hosted CI must
 run on the correction commit; no new visual-browser, container or live-provider
 verification is claimed.
+
+18 October sign-in copy: browser DOM confirms product-only sign-in text, no provider/setup branding. Auth Node contract tests and JavaScript syntax checks pass. Cloud project access attempt using the prior account was denied; selected-account browser authorization is pending. No live sign-in/deployment was verified by that attempt.
+
+18 October integration: 100 Python tests (including backend API and real MCP stdio/loopback integration), 36 Node tests, repository hygiene and governed rehearsal pass. CI installs backend/mcp/requirements.txt alongside root constraints and discovers backend/api/tests through pytest.ini. No tests skipped; two upstream deprecation warnings remain. GitHub main runs 39146703870 and 39146920029 succeeded before this integration.
+
+18 October cloud acceptance: 105 Python + 36 Node regressions pass after adding PUBLIC_ORIGIN tests. Browser caught HTTPS proxy mismatch missed by API-only clients; live collaboration verification now sends Origin and passes against the corrected deployment. Judge member login/session/scoped sources/logout also pass. See deployment/verification.md for retained synthetic evidence and limits.
+
+Late team integration on 18 October: 114 Python + 41 Node tests pass. Reproduced the missing markdown_storage argument as an import-time NameError before repair. Explicit injection restored; Firestore selects database-record content rather than the local file mirror, with a no-files regression. Pitch/video reflect the earlier verified 105/36 snapshot; current integrated suite is larger.
+
+
+19 October integration checkpoint: 140 Python tests pass with
+`backend/mcp/requirements.txt` installed; 59 Node contracts pass. The project
+workflow suite runs against both the shared local registry/private SQLite join
+and a unified transaction adapter. Extra regressions cover publication from a
+second local session, private conversation isolation, a single attributable
+publication event and rejection of modified reviewed files before model input.
+Linux amd64 Docker build, all five browser-module syntax checks, repository
+hygiene and governed rehearsal pass. HTTP smoke checks exercise the restarted
+local app and retained approved project pages; no new Cloud Run deployment is
+claimed for this merge.

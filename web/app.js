@@ -34,7 +34,8 @@ let busy = false;
 let demoPositions = {}, demoCompleted = {};
 let demoCatalog = [], demoRole = 'all', demoCategory = 'All cases', demoSelected = 'handoff', demoReports = {}, demoRunning = null;
 let identityConfig, protectedVersion = 0;
-let selectedProject = sessionStorage.getItem('context-project') || '';
+let selectedProject = sessionStorage.getItem('context-project') || sessionStorage.getItem('contextos-project') || '';
+sessionStorage.removeItem('contextos-project');
 const projectQuery = () => selectedProject ? '?project_id=' + encodeURIComponent(selectedProject) : '';
 const chats = window.taskConversations.create({request:api,onError:error=>toast(error.message,true),onUpdate:chat => {
   if(!state)return;
@@ -47,6 +48,18 @@ const chats = window.taskConversations.create({request:api,onError:error=>toast(
   activeRun = succeeded.at(-1);
   if(currentView === 'work')render();
 }});
+
+let contextProjects=[], projectRequest=0;
+
+function updateProjectMenu(list, selected=selectedProject) {
+  contextProjects=list;
+  const project=list.find(item=>item.id===selected)||list.find(item=>!item.archived);
+  const select=$('#workspace-project-select');
+  select.innerHTML=list.length?(!project?'<option value="" selected disabled>Select a project</option>':'')+list.map(item=>'<option value="'+esc(item.id)+'" '+(item.id===project?.id?'selected':'')+'>'+esc(item.name)+(item.archived?' (archived)':'')+'</option>').join(''):'<option value="">No projects yet</option>';
+  select.disabled=!list.length;
+  $('#project-initial').textContent=(project?.name||'P').charAt(0).toUpperCase();
+  $('#workspace-project-type').textContent=project?.project_type||'Shared knowledge';
+}
 
 async function api(path, body, method = body === undefined ? 'GET' : 'POST') {
   const version = protectedVersion;
@@ -68,32 +81,37 @@ function toast(message, error = false) {
 }
 async function refresh(renderPage = true) {
   const version = protectedVersion;
-  let next;
+  const current=++projectRequest;
+  let next, unavailable;
   try {next = await api('workspace' + projectQuery());}
   catch(error) {
-    if(error.status !== 404 || !selectedProject || version !== protectedVersion)throw error;
+    if(error.status !== 404 || !selectedProject || current !== projectRequest || version !== protectedVersion)throw error;
+    unavailable = selectedProject;
     selectedProject = '';sessionStorage.removeItem('context-project');chats.clear();activeRun=selectedContext=undefined;
     next = await api('workspace');
   }
-  if (version !== protectedVersion) return;
+  if (current !== projectRequest || version !== protectedVersion) return;
   if(next.project?.archived && currentView !== 'knowledge') {
     selectedProject='';sessionStorage.removeItem('context-project');chats.clear();activeRun=selectedContext=undefined;
     next = await api('workspace');
-    if(version !== protectedVersion)return;
+    if(current !== projectRequest || version !== protectedVersion)return;
   }
-  if(!selectedProject && next.projects?.length) {
-    await selectProject(next.projects[0].id);
+  const projects = (next.context_pages_enabled ? await api('context/projects?include_archived=true') : next.projects || []).filter(p=>p.id!==unavailable);
+  if(current !== projectRequest || version !== protectedVersion)return;
+  const chosen = projects.find(p=>p.id===selectedProject && (!p.archived || currentView==='knowledge')) || projects.find(p=>!p.archived);
+  if((chosen?.id || '') !== selectedProject) {
+    await selectProject(chosen?.id);
     return;
   }
+  updateProjectMenu(projects,selectedProject);
   state = next;
   if(chats.current && !state.conversations?.some(c=>c.id===chats.current.id))chats.clear();
   if (state.auth_mode === 'demo' && !demoCatalog.length) demoCatalog = (await api('demo/scenarios')).scenarios;
-  if (version !== protectedVersion) return;
+  if(current!==projectRequest || version!==protectedVersion)return;
   document.body.classList.remove('signed-out');
   $('#sign-out').hidden = state.auth_mode !== 'firebase';
   $('#persona').hidden = state.auth_mode !== 'demo';
   document.querySelector('.persona-label').hidden = state.auth_mode !== 'demo';
-  $('#project-name').textContent = state.project.name;
   $('#persona').value = state.role; $('#persona').disabled = state.auth_mode !== 'demo';
   $('#profile-initial').textContent = roleNames[state.role][0];
   $('#profile-label').innerHTML = `${roleNames[state.role]}<small>${state.auth_mode === 'demo' ? 'Demo persona' : 'Verified member'}</small>`;
@@ -103,7 +121,7 @@ async function refresh(renderPage = true) {
   if (renderPage) render();
 }
 async function selectProject(id) {
-  if (id === selectedProject) return;
+  if ((id || '') === selectedProject) return;
   protectedVersion++;
   selectedProject = id || '';
   chats.clear();
@@ -112,7 +130,6 @@ async function selectProject(id) {
   state = undefined;
   window.contextPages.clear();
   $('#main').innerHTML = '<div class="loading">Opening project…</div>';
-  $('#project-name').textContent = '';
   $('#dialog').close();
   sessionStorage.removeItem('task-draft');
   await refresh();
@@ -159,9 +176,7 @@ function render() {
   $('#mobile-tools').innerHTML = tools;
   $('#crumb').textContent = viewLabel(currentView);
   $('#main').innerHTML = ({overview, work, knowledge, inbox, insights, demo})[currentView]();
-  if (currentView === 'knowledge' && state.context_pages_enabled) window.contextPages.mount($('#context-pages'), async () => {await refresh(false);toast('Proposal created. Open Inbox for independent review.');}, message => showSignIn(message), {
-    projectId:selectedProject, onProjectChange:selectProject, onChanged:() => refresh(false)
-  });
+  if (currentView === 'knowledge' && state.context_pages_enabled) window.contextPages.mount($('#context-pages'), async () => {await refresh(false);toast('Proposal created. Open Inbox for independent review.');}, message => showSignIn(message), selectedProject, async (list,id) => {updateProjectMenu(list,id);if((id || '') !== selectedProject)await selectProject(id);}, () => refresh(false));
   else if (currentView === 'knowledge') $('#search').value = queryFilter;
 }
 function canReview(proposal) {
@@ -207,7 +222,8 @@ function overview() {
   const required = accepted.filter(c => c.mandatory).length;
   const status = critical ? `${critical} critical ${critical === 1 ? 'item' : 'items'}` : items.length ? 'Needs attention' : 'No actions flagged';
   const summary = critical ? 'Required context changed in your earlier work.' : items.length ? `${items.length} ${items.length === 1 ? 'item needs' : 'items need'} your attention.` : accepted.length ? 'Your review queue and recorded runs have no flagged actions.' : 'Start by adding your project’s shared knowledge.';
-  return heading('PROJECT OVERVIEW',esc(state.project.name),'Shared decisions, reviews and work at a glance.',btn('Refresh overview','refresh-overview'))+
+  const project = contextProjects.find(item => item.id === selectedProject);
+  return heading('PROJECT OVERVIEW',esc(project?.name || 'No project selected'),esc(project?.description || 'Select or create a project in Shared knowledge.'),btn('Refresh overview','refresh-overview'))+
     `<section class="overview-status ${critical ? 'is-critical' : ''}" aria-label="Your attention summary"><div><span class="tag ${critical ? 'critical' : items.length ? 'amber' : ''}">${status}</span><h2>${summary}</h2><p>Showing project information available to you · ${roleNames[state.role]}</p></div><div class="button-group">${btn(`${icon('plus')} Start a task`,'navigate',true,'data-view="work"')}${btn('Browse knowledge','navigate',false,'data-view="knowledge"')}</div></section>`+
     `<div class="stats">${stat('Accepted topics',accepted.length,'Shared project knowledge','knowledge')}${stat('Pending proposals',pending,'Awaiting independent review','reviews')}${stat('Affected runs',stale,'Visible runs with changed context','branch')}${stat('Required constraints',required,'Included in context assembly','shield')}</div>`+
     `<div class="grid-2 overview-grid"><section class="panel" aria-labelledby="attention-title"><div class="panel-head"><div><h2 id="attention-title">Needs your attention</h2><p>Changed required context comes first.</p></div><span class="tag">${items.length} ${items.length === 1 ? 'item' : 'items'}</span></div>${items.length ? `<ul class="overview-attention">${items.slice(0,6).map(item => `<li class="overview-attention-item"><div><span class="tag ${item.priority === 0 ? 'critical' : 'amber'}">${item.label}</span><h3>${esc(item.title)}</h3><p>${esc(item.detail)}</p></div>${btn(item.button,item.action,false,item.attrs)}</li>`).join('')}</ul>${items.length > 6 ? `<p class="overview-more">Showing the first 6 of ${items.length} items. Open Inbox for reviews and affected runs.</p>` : ''}` : empty(accepted.length ? 'Nothing needs your attention' : 'No shared knowledge yet',accepted.length ? 'Start a task or explore your team’s accepted decisions.' : 'Add requirements or decisions for an independent owner to review.',accepted.length ? btn('Start a task','navigate',true,'data-view="work"') : btn('Add knowledge','ingest',true),'check')}<div class="panel-bottom">${btn('Open Inbox','navigate',false,'data-view="inbox" data-filter="pending"')}</div></section>`+
@@ -227,7 +243,7 @@ function updateKnowledgeResults() {
   $('#knowledge-count').textContent = `${list.length} context items`;
 }
 function knowledge() {
-  if (state.context_pages_enabled) return '<div class="cp-page-heading"><h1>Shared knowledge</h1><p>Explore the map. Open a context to focus on its content.</p></div>' + '<div id="context-pages"><div class="loading">Loading shared knowledge…</div></div>';
+  if (state.context_pages_enabled) return '<div class="cp-page-heading"><h1>Shared knowledge</h1><p>Read a context and explore its relationships in the map below.</p></div>' + '<div id="context-pages"><div class="loading">Loading shared knowledge…</div></div>';
   const list = filteredKnowledge();
   return heading('SHARED KNOWLEDGE','Find a decision.','Open a topic to inspect or propose a change.',btn(`${icon('plus')} Add knowledge`,'ingest',true))+
   `<div class="toolbar"><div class="search"><input id="search" type="search" placeholder="Search decisions, requirements, or source IDs…" aria-label="Search shared knowledge"></div><select id="domain-filter" aria-label="Filter by domain">${['All domains',...Object.keys(owners)].map(d => `<option ${d === domainFilter ? 'selected' : ''}>${d}</option>`).join('')}</select><span class="muted" id="knowledge-count" aria-live="polite">${list.length} context items</span></div><div id="knowledge-results">${knowledgeResults(list)}</div>`;
@@ -254,7 +270,7 @@ function demo() {
     `<details class="demo-persona-picker"><summary>Filter by persona${demoRole==='all'?'':` · ${demoPersonas[demoRole].title}`}</summary><div class="demo-section-head"><h2>Choose a perspective</h2><button class="text-btn" data-action="demo-persona" data-role="all" aria-pressed="${demoRole==='all'}">Show all personas</button></div><div class="demo-personas">${personas}</div></details>`+
     `<div class="demo-section-head"><div><h2>Explore the solution</h2><p class="muted">${list.length} cases${demoRole==='all'?' across the team':` involving ${demoPersonas[demoRole].title}`}</p></div><select id="demo-category" aria-label="Demo case category">${['All cases',...new Set(demoCatalog.map(s=>s.category))].map(category=>`<option${category===demoCategory?' selected':''}>${category}</option>`).join('')}</select></div>`+
     `<div class="demo-workbench"><section class="panel demo-case-list" aria-label="Demo scenarios">${list.length?list.map(s=>`<button class="demo-case ${s.id===demoSelected?'selected':''}" data-action="demo-select" data-id="${s.id}" aria-pressed="${s.id===demoSelected}"><span class="demo-case-label"><span class="tag">${s.category}</span><span class="demo-case-status">${demoReports[s.id] ? (demoReports[s.id].passed?'✓ Passed':'! Needs attention') : 'Not run'}</span></span><strong>${s.title}</strong></button>`).join(''):empty('No cases in this combination','Choose All cases or show all personas.')}</section><section class="panel demo-detail">${selected ? `<div class="form-panel"><div class="eyebrow">${selected.category.toUpperCase()} WALKTHROUGH</div><h2 class="demo-detail-title">${selected.title}</h2><div class="demo-cast">${selected.roles.map(role=>`<span class="tag green">${demoPersonas[role].title}</span>`).join('<span class="muted">→</span>')}</div><div class="button-group">${btn(demoRunning ? 'Running…' : report ? 'Restart walkthrough' : 'Start walkthrough','demo-run',true,`data-id="${selected.id}" ${demoRunning?'disabled':''}`)}${btn('Try in workspace ↗','demo-try',false,`data-id="${selected.id}" ${demoRunning?'disabled':''}`)}</div>${report ? demoStep(selected,report) : `<div class="demo-ready">${icon('branch')}<h3>Follow the decision, step by step.</h3><p>Start, then use Next to reveal each persona’s action.</p></div>`}<p class="form-help">Try in workspace opens ${viewLabel(selected.view)} as ${demoPersonas[selected.role].title}.</p></div>` : empty('Choose a case','Select another category to continue.')}</section></div>`+
-    `<details class="panel gap-top demo-limits"><summary>Demo scope & cloud status</summary><div class="panel-head"><div><h2>Coverage</h2><p>Local behavior and cloud readiness are tracked separately.</p></div></div><div class="demo-coverage"><div><span class="tag green">Available locally</span><p>Shared knowledge, note candidates, manual authoring, independent review, exact snapshots, restricted access, conflicts, rollback, dependency alerts and usage transparency.</p></div><div><span class="tag amber">Awaiting cloud setup</span><p>Live Gemini reasoning and extraction, real Firebase accounts, Firestore persistence across instances, and Google Cloud deployment.</p></div><div><span class="tag">Future roadmap</span><p>Semantic search, MCP and IDE access, repository synchronization, automatic knowledge consolidation, and enterprise administration.</p></div></div></details>`;
+    `<details class="panel gap-top demo-limits"><summary>Demo scope & cloud status</summary><div class="panel-head"><div><h2>Coverage</h2><p>Local behavior and cloud readiness are tracked separately.</p></div></div><div class="demo-coverage"><div><span class="tag green">Available locally</span><p>Shared knowledge, note candidates, manual authoring, independent review, exact snapshots, restricted access, conflicts, rollback, dependency alerts and usage transparency.</p></div><div><span class="tag amber">Awaiting cloud setup</span><p>Connected AI, team accounts, durable shared storage, and hosted access.</p></div><div><span class="tag">Future roadmap</span><p>Semantic search, MCP and IDE access, repository synchronization, automatic knowledge consolidation, and enterprise administration.</p></div></div></details>`;
 }
 function demoStep(scenario, report) {
   const index = demoPositions[scenario.id] || 0, step = report.steps[index];
@@ -382,6 +398,8 @@ function addKnowledge() {
 }
 function clearProtectedView() {
   protectedVersion++;
+  projectRequest++;
+  updateProjectMenu([],null);
   window.contextPages.clear();
   state = undefined; activeRun = undefined; selectedContext = undefined;
   chats.clear();
@@ -394,14 +412,14 @@ function clearProtectedView() {
   $('#main').replaceChildren(); $('#nav').replaceChildren();
   $('#secondary-nav').replaceChildren();
   $('#mobile-tools').replaceChildren(); $('#workspace-tools').open = false;
-  $('#project-name').textContent = ''; $('#profile-label').textContent = '';
+  $('#profile-label').textContent = '';
   $('#sign-out').hidden = true;
 }
 function showSignIn(message='') {
   clearProtectedView();
   document.body.classList.add('signed-out');
   const ready = identityConfig?.login_ready;
-  $('#main').innerHTML = `<section class="auth-panel"><div class="auth-intro"><a class="brand" href="#overview">ContextOS</a><div class="eyebrow">SHARED KNOWLEDGE. CLEAR OWNERSHIP.</div><h1>Your workspace,<br>with the right access.</h1><p>Sign in to continue with your team’s accepted decisions.</p><span class="tag">Firebase · Protected session</span></div><div class="auth-form-panel"><h2>Sign in</h2><p class="subtitle">Use your administrator-provisioned account.</p>${message ? `<div class="note amber" role="alert">${esc(message)}</div>` : ''}${!ready ? '<div class="note">Firebase sign-in is awaiting project configuration. Ask your administrator to enable email/password sign-in and set the public Web API key.</div>' : ''}<form id="login-form" class="gap-top"><label class="field">Email<input type="email" name="email" autocomplete="username" required maxlength="254" ${ready?'':'disabled'}></label><label class="field">Password<input type="password" name="password" autocomplete="current-password" required maxlength="4096" ${ready?'':'disabled'}></label><button class="btn primary" type="submit" ${ready?'':'disabled'}>Sign in to workspace ${icon('arrow')}</button><p class="form-help">Workspace and role are assigned by your administrator.</p></form><button class="text-btn" data-action="retry-sign-in">Refresh sign-in</button></div></section>`;
+  $('#main').innerHTML = `<section class="auth-panel"><div class="auth-intro"><a class="brand" href="#overview">ContextOS</a><div class="eyebrow">SHARED KNOWLEDGE. CLEAR OWNERSHIP.</div><h1>Your workspace,<br>with the right access.</h1><p>Sign in to continue with your team’s accepted decisions.</p><span class="tag">Team workspace</span></div><div class="auth-form-panel"><h2>Sign in to ContextOS</h2><p class="subtitle">Continue to your workspace.</p>${message ? `<div class="note amber" role="alert">${esc(message)}</div>` : ''}${!ready ? '<div class="note">Sign-in is temporarily unavailable. Please contact your workspace administrator.</div>' : ''}<form id="login-form" class="gap-top"><label class="field">Email<input type="email" name="email" autocomplete="username" required maxlength="254" ${ready?'':'disabled'}></label><label class="field">Password<input type="password" name="password" autocomplete="current-password" required maxlength="4096" ${ready?'':'disabled'}></label><button class="btn primary" type="submit" ${ready?'':'disabled'}>Sign in to workspace ${icon('arrow')}</button><p class="form-help">Access is managed by your team.</p></form><button class="text-btn" data-action="retry-sign-in">Try again</button></div></section>`;
 }
 async function bootstrapIdentity() {
   try {
@@ -543,7 +561,12 @@ document.addEventListener('input', e => {
 document.addEventListener('compositionend', e => {
   if (e.target.id === 'search') {queryFilter = e.target.value; updateKnowledgeResults();}
 });
-document.addEventListener('change',e => {if (e.target.id === 'demo-category') {demoCategory = e.target.value; render();} if (e.target.id === 'domain-filter') {domainFilter = e.target.value; updateKnowledgeResults();} if (e.target.id === 'task-budget') sessionStorage.setItem('task-budget',e.target.value);});
+document.addEventListener('change',e => {
+  if(e.target.id==='workspace-project-select'){selectProject(e.target.value).catch(error=>toast(error.message,true));}
+  if(e.target.id === 'demo-category') {demoCategory = e.target.value; render();}
+  if(e.target.id === 'domain-filter') {domainFilter = e.target.value; updateKnowledgeResults();}
+  if(e.target.id === 'task-budget') sessionStorage.setItem('task-budget',e.target.value);
+});
 document.addEventListener('keydown',e => {
   if(e.key === 'Escape' && $('#workspace-tools').open) {
     $('#workspace-tools').open = false;

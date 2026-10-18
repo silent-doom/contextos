@@ -8,21 +8,21 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/style.css?v=overview-1">
-<script src="/assets/auth.js?v=firebase-1" defer></script>
+<link rel="stylesheet" href="/assets/style.css?v=session-3">
+<script src="/assets/auth.js?v=session-3" defer></script>
 <script src="/assets/context-map.js" defer></script>
 <script src="/assets/vendor/marked.js" defer></script>
 <script src="/assets/vendor/purify.js" defer></script>
 <script src="/assets/context-pages.js" defer></script>
 <script src="/assets/conversations.js" defer></script>
-<script src="/assets/app.js?v=project-context-2" defer></script>
+<script src="/assets/app.js?v=shared-workspace-4" defer></script>
 </head>
 <body>
 <a href="#main" class="skip">Skip to workspace</a>
 <aside class="sidebar">
 <a class="brand" href="#overview"><span class="brand-icon">c<span>•</span></span>Context<span class="brand-os">OS</span></a>
 <div class="workspace-label">WORKSPACE</div>
-<div class="project-switch"><span class="project-mark">C</span><span><span id="project-name">Checkout reliability</span><small>Product & engineering</small></span><span class="chevron">⌄</span></div>
+<div class="project-switch"><span class="project-mark" id="project-initial" aria-hidden="true">C</span><div class="project-switch-content"><label class="sr-only" for="workspace-project-select">Active project</label><select id="workspace-project-select" aria-label="Active project" aria-describedby="workspace-project-type" disabled><option value="">Loading projects…</option></select><small id="workspace-project-type">Shared knowledge</small></div><svg class="project-switch-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></div>
 <div class="workspace-label nav-label">WORKSPACE</div>
 <nav aria-label="Main navigation" id="nav"></nav>
 <nav aria-label="Workspace tools" id="secondary-nav" class="secondary-nav"></nav>
