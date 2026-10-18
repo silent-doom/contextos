@@ -23,3 +23,7 @@ Team: **Three-Way Handshake** — Faizan Choudhary, Amogh Prabhu, Ankush Bhagat.
 - Synthetic walkthrough: https://contextos-demo-443743777956.asia-south1.run.app
 - A separate Developer member in `judges-mvp` has seeded checkout knowledge. Credentials are in the private local `.data/judge-access.txt` file, excluded from Git and all media. Share them only through the judging process.
 - Start in Overview, use Work for a live grounded task, inspect exact sources, propose a change and inspect the pending Inbox. Member identity is fixed: self-approval and persona switching are denied. The public walkthrough demonstrates the independent reviewer and other personas; live two-user publication is separately verified in `deployment/verification.md`.
+
+## Capture version
+
+The deck/video capture the verified MVP before late team changes merged on 18 October. Their 105 Python / 36 JavaScript figures describe that capture; the integrated source now passes 114 / 41 and is deployed. Core walkthrough controls and evidence remain valid. See deployment/verification.md for the current revisions and new context-page verification.
