@@ -94,9 +94,13 @@ test('Overview prioritizes changed required context and keeps personal actions s
     {id:'self',title:'My own pending proposal',domain:'Architecture',author:fixture.actor,status:'pending'},
     {id:'other',title:'Another domain proposal',domain:'Requirements',author:'product',status:'pending'}];
   fixture.events=[{action:'Revision published',detail:'Required <contract> updated',actor:'product',outcome:'completed',at:'2026-10-18T12:00:00Z'}];
-  const page=workspace(fixture);page.render('overview');
+  const page=workspace(fixture);
+  page.context.projects=[{id:'selected',name:'Saved <project>',description:'Stored description'}];
+  page.run("updateProjectMenu(projects,'selected')");
+  page.render('overview');
   const html=page.element('#main').innerHTML;
-  assert.match(html,/Checkout &lt;project&gt;/);
+  assert.match(html,/Saved &lt;project&gt;/);
+  assert.doesNotMatch(html,/Checkout &lt;project&gt;/);
   assert.match(html,/1 critical item/);
   assert.match(html,/REQ-1 v1 → v2/);
   assert.match(html,/Review &lt;design&gt;/);
@@ -154,11 +158,12 @@ test('Overview detects proposal base conflicts without offering publication',asy
 });
 
 test('Overview refreshes on entry and on request using the current permitted snapshot',async()=>{
-  const fixture=state(),page=workspace(fixture);page.render('work');
-  page.context.fixture={...fixture,project:{name:'Updated project'}};
+  const fixture=state();fixture.context_pages_enabled=true;
+  const projects=[{id:'saved',name:'Updated project'}];
+  const page=workspace(fixture,{contextResponses:{'/api/context/projects?include_archived=true':projects}});page.render('work');
   page.context.location.hash='#overview';await page.handlers.window.hashchange();
   assert.match(page.element('#main').innerHTML,/Updated project/);
-  page.context.fixture={...fixture,project:{name:'Refreshed again'}};
+  projects[0].name='Refreshed again';
   await page.run('action({dataset:{action:"refresh-overview"}})');
   assert.match(page.element('#main').innerHTML,/Refreshed again/);
   assert.equal(page.calls.filter(c=>c.url==='/api/workspace').length,2);
@@ -332,4 +337,27 @@ for (const route of ['inbox','overview']) test(`a late ${route} response cannot 
   assert.equal(page.run('state'),undefined);
   assert.equal(page.element('#main').innerHTML,'');
   assert.equal(page.element('#nav').innerHTML,'');
+});
+
+
+test('Overview uses fetched project metadata, follows selection and rename, and never falls back to the legacy demo name',async()=>{
+  const fixture=state();fixture.context_pages_enabled=true;
+  fixture.project.name='Checkout reliability';
+  const projects=[{id:'one',name:'Local <project>',description:'Saved <description>',project_type:'Software'},
+    {id:'two',name:'Cloud project',description:'Firestore description',project_type:'Research'}];
+  const page=workspace(fixture,{contextResponses:{'/api/context/projects?include_archived=true':projects}});
+  await page.run('refresh()');
+  assert.match(page.element('#main').innerHTML,/Local &lt;project&gt;/);
+  assert.match(page.element('#main').innerHTML,/Saved &lt;description&gt;/);
+  assert.doesNotMatch(page.element('#main').innerHTML,/Checkout reliability/);
+  page.run("updateProjectMenu(contextProjects,'two');render()");
+  assert.match(page.element('#main').innerHTML,/Cloud project/);
+  assert.match(page.element('#main').innerHTML,/Firestore description/);
+  projects[1].name='Renamed project';
+  await page.run('refresh()');
+  assert.match(page.element('#main').innerHTML,/Renamed project/);
+  projects.length=0;
+  await page.run('refresh()');
+  assert.match(page.element('#main').innerHTML,/No project selected/);
+  assert.doesNotMatch(page.element('#main').innerHTML,/Checkout reliability|Renamed project/);
 });
