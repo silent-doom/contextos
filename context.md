@@ -114,6 +114,49 @@ Replaced the developer token-entry bridge with an email/password sign-in screen,
 
 Added clean authenticated-workspace initialization without synthetic knowledge, preserved existing data, made unknown backend/missing Firestore project settings fail explicitly, and retained the Cloud Run SQLite guard. Added five config/init tests. Prepared Firestore client-deny rules, payload index exclusions and a separate live/emulator verification script; only its CLI help was exercised, no cloud writes occurred. 55 Python + 4 Node tests pass.
 
+## 2026-10-18 — Royal-blue and off-white palette
+
+- User requested replacing brown/beige with royal blue and an off-white background. Updated shared colors, sidebar surfaces, links, buttons, focus rings, status/diff treatments and favicon. White cards and pale-blue interactive surfaces separate content from the canvas; existing layout, typography and behavior remain.
+- Bumped the stylesheet URL and updated current theme directions in project documentation, superseding earlier palette choices. Historical prototypes/screenshots remain as references.
+- Verified six representative text/background pairs above 4.5:1 contrast, CSS variable references/braces, updated assets served through FastAPI TestClient, the existing static-assets/security-header test, repository hygiene and diff whitespace. The local service still listens on port 8000.
+- Browser inventory was empty, so no new visual/responsive browser verification or screenshots are claimed. Source changes are on local branch codex/royal-blue-theme; no commit or push performed.
+
+## 2026-10-18 — First enhancement slice: collaboration verification
+
+- User authorized incremental product enhancements with small, architecturally focused slices; subsequently deferred Google Cloud project selection/setup until we can do it together.
+- Added an external API verifier with an injected HTTP-client factory. It exchanges two Firebase ID tokens for independent cookie sessions and verifies shared decisions, denied author approval, independent publication/audit, original vs refreshed manifests, stale warnings, fresh-session history and logout. Existing domain/identity/store rules remain authoritative.
+- Tokens enter through operator environment variables; redirects are not followed, staging uses HTTPS except loopback, output excludes credentials/content, and offline rehearsal requires an explicit flag. Synthetic verification records are retained; live mode can make two billable calls.
+- Added ten regression cases. Full validation: 66 Python tests and 4 Node auth tests pass; CLI help, repository hygiene and diff checks pass. Two existing upstream deprecation warnings remain.
+- No target project was configured and no cloud writes occurred. Live provider, Firestore/redeploy and browser UI evidence remain open. Palette edits from the preceding task are preserved separately.
+
+## 2026-10-18 — Second enhancement slice: Work, Knowledge and Inbox
+
+- Replaced six primary links with Work/Knowledge/Inbox. Activity & usage and Walkthroughs remain secondary, including a mobile More menu. A shared resolver retains old overview/tasks/reviews URLs and demo destinations.
+- Work now has one task form, advanced budgets, preserved drafts and a source panel tied to the selected run's original manifest. Inbox combines owner-scoped proposal attention with affected personal runs and Pending/For my review/History filters. Publication remains explicit and server-authorized.
+- Seven Node controller tests cover routing, attention scope, original sources, draft/budget recovery and protected cleanup, shared refresh/history, Knowledge search and late workspace responses after sign-out. They uncovered a pre-existing missing filteredKnowledge function, now restored with text/domain filtering and focus-preserving updates. Refresh uses a protected-view generation to discard responses after cleanup. CI runs all browser contract files.
+- Validation: 66 Python + 11 Node tests pass; syntax, page structure/assets, CSS references/braces, repository hygiene and diff checks pass. No browser connection was available for visual/responsive QA. Existing upstream warnings remain. Backend behavior, storage and cloud resources are unchanged; persistent conversations remain a future slice.
+
+## 2026-10-18 — Third enhancement slice: conversation backend
+
+- Added a focused conversation application service over the existing store and AI adapter. Saved conversations are private to their initiating actor/role; accepted knowledge remains shared. Old workspaces initialize lazily and the standalone task endpoint stays compatible.
+- Each ordered turn retains the user goal, response, status, exact accepted-source manifest and explicit references to working history. Follow-ups retrieve against earlier goals and supply bounded untrusted history. Source/dependency changes flag direct and inherited context; explicit refresh starts a new working segment while preserving old turns.
+- Pending turns, quota reservations and audit events commit together. Request keys deduplicate retries, leases recover interrupted attempts, and attempt fencing prevents a late response from overwriting its replacement. Model calls remain outside transactions. Known failed-call usage is retained; unexpected errors are redacted.
+- Current access controls cover every historical source, transcript, inspection event, usage record and export. Revocation conservatively hides the entire conversation. History/output/turn limits fail visibly, sharing existing workspace quotas and storage bounds.
+- Added 17 conversation regressions and two model contract tests. Validation: 85 Python + 11 Node tests pass, including actual concurrent SQLite requests and expired-attempt fencing. Existing upstream warnings remain. Contract: design/specs/conversations.md. P3-S07 is complete locally; P3-S08 chat UI, visual QA, live provider/Firestore and deployment remain open. No cloud setup performed; prior palette edits remain separate.
+
+## 2026-10-18 — Restore the Overview tab
+
+- User requested a project overview with attention and critical items. Restored Overview as the first/default destination, retaining Work/Knowledge/Inbox, secondary tools and task/review bookmarks. Brand links and asset versions updated.
+- Added permitted project counts, recent activity and personal actions. Critical identifies changed required revisions in stale personal runs; other actions cover independent reviews, author/reviewer proposal conflicts, latest failed model attempts and stale work. Buttons inspect original runs or open the appropriate queue. No project-health certification or fabricated severity is implied.
+- Entry/manual refresh uses the existing protected-state guard; cards reuse current styling with responsive priority rows and a 6.20:1 Critical badge contrast. Previous palette edits preserved separately. Backend/API/data unchanged.
+- Validation: 85 Python + 16 Node tests, JavaScript syntax, served assets, CSS structure/tokens and repository checks pass. Five additional controller cases cover priority/scope/escaping, empty/failed state, conflicts, refresh and late-response cleanup. No connected browser was available for new visual QA; no cloud calls made.
+
 ## 2026-10-18 — Selected cloud project and professional sign-in copy
 
 Owner selected contextos-512006 and corrected the Google identity to choudhary.faizan2002@gmail.com. Initial lookup using the previously active account returned permission denied. Started the normal gcloud browser authorization for the selected account; user completion is pending. Removed provider branding/setup jargon from rendered sign-in and auth errors, preserving explicit temporary-unavailable/retry states. Technical provider details remain in operator docs.
+
+Remote integration checkpoint: preserved team commits through 67c891a (conversation backend, Overview/Work/Knowledge/Inbox and shared context pages/MCP). Resolved appended-log conflicts by retaining both histories and kept the new provider-neutral login copy. No remote work overwritten.
+
+## 2026-10-18 — CI integration and deployment access
+
+Preserved current team routing and its six additional browser regression tests from 7e123fc, together with product-neutral sign-in copy. CI now installs the pinned MCP test dependency and pytest discovers backend/api/tests; all JavaScript modules and both Node suites run. Local validation: 100 Python and 36 Node tests, repository hygiene and governed rehearsal pass, with two existing dependency warnings. GitHub runs 39146920029 and 39146703870 are green; earlier 39145607611 failed browser JavaScript. Selected Google account is authenticated and can access contextos-512006. Billing is disabled and Firestore API is not yet enabled; requested end-to-end deployment awaits billing. No deployment claimed.

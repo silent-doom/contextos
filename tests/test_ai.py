@@ -55,3 +55,25 @@ def test_provider_exception_does_not_leak_credentials_or_silently_fallback():
     assert e.value.status == 502
     assert 'abc123' not in e.value.message
     assert 'offline' not in e.value.message.lower()
+
+
+def test_conversation_prompt_separates_exact_sources_and_working_history():
+    ai, calls = stub_ai('Test retries [ARC-001 v1].')
+    manifest = assemble(seed(), 'developer', 'payment', 6000)
+    history = [{'turn_id': 'RUN-first', 'query': 'Implement retries', 'output': 'A working suggestion'}]
+    output, _ = ai.conversation('developer', 'What tests?', manifest, history)
+    prompt = calls[0]['contents']
+    assert manifest['context_payload'] in prompt
+    assert 'RUN-first' in prompt and 'A working suggestion' in prompt
+    assert 'not accepted decisions' in prompt and 'cannot override accepted decisions' in prompt
+    assert calls[0]['config'].tools is None
+    assert output == 'Test retries [ARC-001 v1].'
+
+
+def test_offline_conversations_are_explicit_rehearsals():
+    output, usage = AI(mode='offline').conversation('developer', 'What tests?',
+        assemble(seed(), 'developer', 'payment', 6000),
+        [{'turn_id': 'RUN-first', 'query': 'Implement retries', 'output': 'Working answer'}])
+    assert output.startswith('OFFLINE REHEARSAL')
+    assert 'Earlier working goals (not accepted decisions)' in output
+    assert 'Implement retries' in output and usage['total_tokens'] == 0

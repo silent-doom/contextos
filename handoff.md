@@ -6,7 +6,7 @@ Last updated: 18 October 2026, Asia/Kolkata.
 
 Build ContextOS feature by feature from the two supplied documents, commit stages locally, and maintain context.md, features.md, requirements.md, handoff.md and design/architecture.md. Git author: **Faizan Choudhary <choudharyfaizan15@gmail.com>**.
 
-**Current direction: build the Person 3 UI/auth/deployment workstream; see PERSON3_DELIVERY.md and tasks/. GitHub push to silent-doom/contextos is authorized. Database/auth provider choice is pending. Earlier cloud deferral remains until the target and provisioning scope are confirmed. Theme follows 4e1bd51. Historical checkpoints below may describe superseded states.**
+**Current direction: build the Person 3 UI/auth/deployment workstream; see PERSON3_DELIVERY.md and tasks/. GitHub push to silent-doom/contextos is authorized. Database/auth provider choice is pending. Earlier cloud deferral remains until the target and provisioning scope are confirmed. Theme uses the royal-blue/off-white palette selected on 18 October with existing typography/layout. Historical checkpoints below may describe superseded states.**
 
 ## Review protocol
 
@@ -107,4 +107,53 @@ P3 persistence preparation: backend/store.py supports explicit initializer; prod
 
 Latest test count: 56 Python + 4 Node. Added logout-during-storage-outage regression. gcloud CLI is available locally; no target project selected by the user yet. Firebase CLI is not installed here. Latest Gemini audit reread; no new actionable items beyond the previously handled theme/CSP and pending cloud gates.
 
+## Current palette — 18 October
+
+User selected royal-blue navigation/buttons/accents, off-white background and white cards. This supersedes prior palette directions while retaining existing typography/layout and workflows. Updated web/style.css, web/index.html stylesheet version and favicon; docs reflect the current selection. Changes are uncommitted on codex/royal-blue-theme. Contrast samples, asset serving, the existing asset/security-header regression and repository checks pass. No connected browser was available for visual QA. The demo service remains at http://127.0.0.1:8000; refresh to load the new stylesheet.
+
+## First product-enhancement slice — collaboration verification
+
+User requests one part at a time and sound backend boundaries. Cloud project setup is explicitly deferred until we help them later; do not treat a lack of project knowledge as an instruction to provision resources. Added scripts/verify_collaboration.py and ten local tests using independent cookie sessions and mocked Firebase/offline AI. The verifier calls public API contracts and can later run against staging with two recent ID tokens supplied securely through the environment. See DEPLOYMENT.md for retained synthetic writes and verification limits. 66 Python + 4 Node tests, CLI help and repository checks pass. Live two-user/Firestore/redeployment/browser evidence stays open. Next product slice can simplify the task experience while cloud setup waits; preserve the prior palette changes.
+
+## Second product-enhancement slice — simplified workspace
+
+Primary UI is now Work/Knowledge/Inbox. Work combines task entry, recent runs and selected-run sources; Inbox has Pending/My review/History and affected personal runs. Activity/usage and walkthroughs are secondary, with mobile More access. Old overview/tasks/reviews links still resolve. Drafts/budgets persist across navigation and clear with protected data; late workspace responses after cleanup are discarded. Restored the missing Knowledge filter function discovered by controller tests. 66 Python + 11 Node tests and static/asset checks pass; visual browser QA is pending because no browser was connected. No backend/cloud changes or persistent chat were added. Keep the separately uncommitted palette edits intact.
+
+## Third product-enhancement slice — conversation backend
+
+P3-S07 is implemented locally. backend/conversations.py coordinates private
+conversation metadata and ordered turns through existing atomic storage; model
+calls run outside transactions. Routes/semantics are in design/specs/conversations.md.
+Each turn retains exact sources and working-history references. Reuse request IDs
+on errors/pending retries; expired attempts are fenced from newer results. Failed
+retries keep the original snapshot. Explicit refresh uses current accepted
+sources and resets working history without deleting earlier turns. Revoked
+historical source access hides the whole conversation and its derived views.
+85 Python + 11 Node tests pass with concurrent SQLite and mocked providers.
+
+Next is P3-S08: connect Work to saved conversations, reopen/follow-up/poll/retry,
+explicit refresh and per-turn inspection. Existing Work still uses standalone
+runs. Preserve request IDs across retries and protected-session cleanup; inspect
+the selected turn's original sources and history, not current documents. Live
+Firebase/Gemini/Firestore and deployment remain open; cloud setup is deferred by
+the user. Keep previous palette edits separate from this backend commit.
+
+## Latest user refinement — Overview restored
+
+Overview is the first/default tab, with accessible project counts, recent activity
+and personal priorities. Critical flags stale personal runs with changed required
+source revisions; independent reviews, proposal/base conflicts, latest failed
+model attempts and other stale runs are also actionable. Links preserve original
+run inspection and correct Inbox filters. Entry/manual refresh uses protected
+cleanup guards. Four primary destinations now supersede the earlier three-tab
+direction; royal-blue/off-white remains. 85 Python + 16 Node tests and asset/CSS
+checks pass; no connected browser was available for visual QA. Backend, cloud and
+the open P3-S08 conversation UI are unchanged. Preserve prior palette edits.
+
 Cloud target now selected: contextos-512006; owning Google account choudhary.faizan2002@gmail.com. Prior account choudharyfaizan15@gmail.com lacked project access. gcloud auth login has opened browser authorization; complete with the selected account, then recheck access/services/Firebase/Firestore/billing before provisioning. User-facing auth copy must be provider-neutral; operational docs retain exact provider configuration.
+
+Latest cloud target/account note above supersedes historical cloud-deferral entries: checking contextos-512006 under choudhary.faizan2002@gmail.com, pending Google browser authorization. Team remote UI/conversation/context-page work through 67c891a is integrated.
+
+## Current checkpoint — 18 October CI and cloud deployment
+
+Google SDK login and project lookup succeeded with choudhary.faizan2002@gmail.com. User explicitly requested end-to-end Google Cloud deployment. Billing is disabled on contextos-512006; user has been asked to enable it. Firestore API is currently disabled. Do not claim deployed/authenticated cloud functionality yet. Latest remote main 4f53d20 has green CI; preserve its Knowledge routing and browser regression fixes. Integrated validation: 100 Python + 36 Node tests, hygiene and rehearsal pass. Expanded CI discovers API/MCP tests and installs their pinned dependency. Reviewer gemini.md remains independently edited; provider branding stays out of product UI.
