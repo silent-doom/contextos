@@ -83,3 +83,9 @@ scoped personal actions show changed required constraints as Critical, independe
 reviews, proposal/base conflicts and affected work, with source/review links and
 refresh. No backend or policy changes. 85 Python + 16 Node tests pass; new visual
 browser QA remains unavailable. This supersedes the Overview-to-Work redirect.
+
+Shared-knowledge merge repair: /knowledge and its page/map lifecycle now coexist
+with Overview/Work/Inbox, secondary tools, legacy routes and protected refresh
+cleanup. The controller fixture loads real modules and models location/history.
+Six new integration checks plus the existing map/page suite bring local totals
+to 85 Python + 36 Node. CI includes that suite; hosted verification is pending.

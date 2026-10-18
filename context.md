@@ -151,6 +151,13 @@ Added clean authenticated-workspace initialization without synthetic knowledge, 
 - Entry/manual refresh uses the existing protected-state guard; cards reuse current styling with responsive priority rows and a 6.20:1 Critical badge contrast. Previous palette edits preserved separately. Backend/API/data unchanged.
 - Validation: 85 Python + 16 Node tests, JavaScript syntax, served assets, CSS structure/tokens and repository checks pass. Five additional controller cases cover priority/scope/escaping, empty/failed state, conflicts, refresh and late-response cleanup. No connected browser was available for new visual QA; no cloud calls made.
 
+## 2026-10-18 — Repair shared-knowledge merge integration
+
+- User authorized fixing the CI failure on ankush-changes. Fast-forwarded the clean local branch from 249ddc6 to its existing remote head 2976e21, which contains the shared-knowledge merge. Reproduced the same 4-pass/12-failure Node result as hosted CI.
+- Updated the fixture to load the real context-map/context-pages modules and model URL/history behavior. Restored Work/Inbox render dispatch, Inbox initialization, primary/secondary navigation, Overview/Inbox refresh and the protected-generation increment. Preserved /knowledge, contextpages/tasks/reviews aliases, popstate, query strings and real page lifecycle cleanup; bumped the app asset version.
+- Added six integration regressions covering direct Knowledge paths, history/aliases, link routing, pending page loads after navigation/sign-out and 401 handoff. CI also checks the new modules' syntax and runs the existing 14 context-page/map tests.
+- Validation: 85 Python + 36 Node tests pass on Node 24.18.0; syntax, served assets, rehearsal, repository hygiene and diff checks pass. Two pre-existing Python warnings remain. Hosted CI on this fix and visual browser verification remain pending. No browser/account settings or backend policy changes were needed.
+
 ## 2026-10-18 — Selected cloud project and professional sign-in copy
 
 Owner selected contextos-512006 and corrected the Google identity to choudhary.faizan2002@gmail.com. Initial lookup using the previously active account returned permission denied. Started the normal gcloud browser authorization for the selected account; user completion is pending. Removed provider branding/setup jargon from rendered sign-in and auth errors, preserving explicit temporary-unavailable/retry states. Technical provider details remain in operator docs.

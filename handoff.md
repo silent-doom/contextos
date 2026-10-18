@@ -150,6 +150,18 @@ direction; royal-blue/off-white remains. 85 Python + 16 Node tests and asset/CSS
 checks pass; no connected browser was available for visual QA. Backend, cloud and
 the open P3-S08 conversation UI are unchanged. Preserve prior palette edits.
 
+## Latest fix — shared-knowledge merge and CI
+
+User asked to fix the merged code on ankush-changes. Local branch fast-forwarded
+to the already-pushed merge 2976e21. Restored Work/Inbox render functions, Inbox
+initialization, secondary tools and protectedVersion cleanup while retaining
+the shared-knowledge modules, /knowledge path, aliases and history. Tests load
+real page/map scripts and model location/history; six integration cases added.
+85 Python + 36 Node tests pass locally; CI now includes 14 existing page/map
+cases and syntax checks. No browser setting is required. Original PR #6 is
+already merged, so hosted verification needs the fix pushed and a follow-up PR
+or an appropriate workflow run. No new live-provider/visual/container evidence.
+
 Cloud target now selected: contextos-512006; owning Google account choudhary.faizan2002@gmail.com. Prior account choudharyfaizan15@gmail.com lacked project access. gcloud auth login has opened browser authorization; complete with the selected account, then recheck access/services/Firebase/Firestore/billing before provisioning. User-facing auth copy must be provider-neutral; operational docs retain exact provider configuration.
 
 Latest cloud target/account note above supersedes historical cloud-deferral entries: checking contextos-512006 under choudhary.faizan2002@gmail.com, pending Google browser authorization. Team remote UI/conversation/context-page work through 67c891a is integrated.

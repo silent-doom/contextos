@@ -122,6 +122,16 @@ reviews/conflicts and stale work remain separate actionable descriptions. No
 backend authority changed. 85 Python + 16 Node tests pass; assets, CSS and contrast
 checked. Connected-browser visual QA remains unavailable; palette edits preserved.
 
+## Shared-knowledge merge integration repair — 2026-10-18
+
+Latest reviewer file unchanged. Confirmed the reported CI failure against merged
+head 2976e21 and repaired the fixture plus controller integration, preserving
+the new /knowledge page and map lifecycle. Restored existing dispatch, Inbox,
+secondary navigation and protected refresh cleanup. Six integration regressions
+added; all 85 Python + 36 Node checks pass locally, including the existing map
+suite. Hosted CI on the correction remains pending; no provider/browser settings
+or backend authorization rules changed.
+
 ## Project and presentation update — 2026-10-18
 
 User selected project contextos-512006 and account choudhary.faizan2002@gmail.com. Initial CLI account could not access the project; correct-account login initiated. Sign-in screen and auth errors now use ContextOS product language, with no provider names or setup internals. Deployment/verification status stays truthful in operator documentation.

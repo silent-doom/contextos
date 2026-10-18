@@ -107,3 +107,14 @@ details identify that source and both revisions. Other reviews, base conflicts,
 latest failed calls and stale runs retain descriptive labels. Inspection uses
 the original run, and review links open the appropriate Inbox filter. Snapshot
 refresh shares the protected-generation guard used by Inbox and Activity.
+
+## Controller integration with shared-knowledge pages
+
+The route resolver normalizes /knowledge and contextpages/tasks/reviews aliases
+to current workspace views. Rendering retains current navigation/dispatch and
+clears the shared-knowledge module before mounting its next root. Browser history
+updates preserve query strings. Protected cleanup increments the workspace
+generation and clears the page module, whose own generation cancels pending
+loads. Integration fixtures load both real modules and supply location/history;
+CI runs these contracts alongside the context-page/map suite. This repairs the
+merge boundary without changing backend authority or context storage.
