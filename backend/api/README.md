@@ -118,3 +118,5 @@ The MCP client keeps one demo session across calls. Demo browser sessions are se
 The UI uses locally bundled Marked and DOMPurify; rendered Markdown is sanitized with a narrow tag/attribute allowlist. Images and executable/interactive HTML are excluded. Bundle versions and licenses are in web/vendor/README.md. No npm build is required.
 
 Checks: python -m pytest -q tests backend/api/tests and node --test tests/browser_auth.test.cjs backend/api/tests/context_pages.test.cjs. API tests use an isolated memory store and include a real MCP stdio round trip. No live database changes are required.
+
+Cloud deployments keep Markdown bodies and history in the same canonical Firestore workspace transaction as project metadata and proposal hashes. The temporary filesystem mirror is selected only for local stores; it is not a cloud persistence dependency.

@@ -33,3 +33,17 @@ def test_storage_rejects_paths_from_record_ids(tmp_path):
             storage.revision('../outside' if field == 'project_id' else 'PRJ-one',
                              {'id': '../outside' if field == 'id' else 'CTX-one', 'version': 1, 'content': 'x'})
     assert list(tmp_path.rglob('*.md')) == []
+
+
+def test_firestore_content_adapter_needs_no_local_files(tmp_path):
+    from backend.data.storage import make_markdown_storage
+    from backend.store import FirestoreStore
+    storage = make_markdown_storage(FirestoreStore.__new__(FirestoreStore), tmp_path / 'unused')
+    old = {'id': 'CTX-one', 'version': 1, 'content': 'Accepted v1'}
+    latest = {**old, 'version': 2, 'content': 'Accepted v2'}
+    assert storage.revision('PRJ-one', old) == 'Accepted v1'
+    assert storage.revision('PRJ-one', latest) == 'Accepted v2'
+    proposal = {'id': 'PRO-one', 'candidate': {'content': 'Pending suggestion'}}
+    assert storage.proposal('PRJ-one', proposal) == 'Pending suggestion'
+    storage.sync({'context_projects': {}})
+    assert not (tmp_path / 'unused').exists()
