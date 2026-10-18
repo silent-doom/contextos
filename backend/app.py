@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from backend import domain as d
 from backend.ai import AI
 from backend.store import make_store
+from backend.conversations import ConversationService
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -39,6 +40,16 @@ class TaskInput(Input):
     budget: int = Field(default=6000, ge=200, le=16000)
 
 
+class ConversationInput(Input):
+    title: str = Field(min_length=3, max_length=120)
+    request_id: str = Field(pattern=r'^[a-zA-Z0-9_-]{8,80}$')
+
+
+class TurnInput(TaskInput):
+    request_id: str = Field(pattern=r'^[a-zA-Z0-9_-]{8,80}$')
+    refresh_context: bool = False
+
+
 class IngestInput(Input):
     notes: str = Field(min_length=10, max_length=8000)
     source: str = Field(min_length=1, max_length=200)
@@ -59,6 +70,7 @@ def create_app(store=None, ai=None, markdown_storage=None):
     app.state.ai = ai or AI()
     from backend.data.storage import MarkdownStorage
     app.state.markdown_storage = markdown_storage or MarkdownStorage(ROOT / 'storage')
+    app.state.conversations = ConversationService(app.state.store, app.state.ai)
     auth_mode = os.getenv('AUTH_MODE', 'demo')
     if auth_mode not in ('demo', 'firebase'):
         raise RuntimeError('AUTH_MODE must be demo or firebase.')
@@ -79,8 +91,9 @@ def create_app(store=None, ai=None, markdown_storage=None):
             try:
                 app.state.store.mutate(wid, lambda s: d.audit(
                     s, actor, f'{operation.title()} {outcome}', None,
-                    f'HTTP {exc.status}. No requested change was committed.',
-                    role=role, outcome=outcome, private_role=role))
+                    f'HTTP {exc.status}. The request did not complete.',
+                    role=role, outcome=outcome, private_role=role,
+                    private_actor=actor if operation == 'conversations' else None))
             except d.Problem:
                 import logging
                 logging.getLogger(__name__).warning('Audit append unavailable at workspace capacity.')
@@ -129,24 +142,7 @@ def create_app(store=None, ai=None, markdown_storage=None):
         return request.state.identity_info
 
     def reserve(workspace, role, sources, kind):
-        run_id = d.uid('CALL')
-        def mutation(s):
-            # A bounded public-demo allowance also counts failed calls.
-            if len(s['usage']) >= 50:
-                raise d.Problem('This workspace has reached its 50-call demo allowance. Export and start a new sandbox.', 429)
-            from datetime import datetime, timezone, timedelta
-            cutoff = datetime.now(timezone.utc) - timedelta(seconds=60)
-            recent = [u for u in s['usage'] if datetime.fromisoformat(u['at']) > cutoff]
-            if len(recent) >= 6:
-                raise d.Problem('Please wait a minute before making more model requests.', 429)
-            s['usage'].append({'id': run_id, 'at': d.now(), 'kind': kind, 'status': 'pending', 'source_ids': sources, 'private_role': role if kind == 'extraction' else None})
-        app.state.store.mutate(workspace, mutation)
-        return run_id
-
-    def finish_usage(state, call_id, usage=None, failed=False):
-        entry = next(u for u in state['usage'] if u['id'] == call_id)
-        entry.update(usage or {})
-        entry['status'] = 'completed' if usage is not None and not failed else 'failed'
+        return app.state.store.mutate(workspace, lambda state: d.reserve_usage(state, role, sources, kind))
 
     from backend.identity import register_auth_routes
     register_auth_routes(app, auth_mode)
@@ -175,7 +171,7 @@ def create_app(store=None, ai=None, markdown_storage=None):
     def workspace(request: Request, response: Response):
         wid, actor, role = identity(request, response)
         current = app.state.store.read(wid)
-        result = d.snapshot(current, role)
+        result = d.snapshot(current, role, actor)
         result.update(actor=actor, ai_mode=app.state.ai.mode, auth_mode=auth_mode,
                       next_actions=d.next_actions(current, role, actor), context_pages_enabled=True)
         return result
@@ -213,6 +209,28 @@ def create_app(store=None, ai=None, markdown_storage=None):
             return result
         return app.state.store.mutate(wid, assemble_context)
 
+    @app.post('/api/conversations')
+    def create_conversation(data: ConversationInput, request: Request, response: Response):
+        wid, actor, role = identity(request, response)
+        return app.state.conversations.create(wid, actor, role, data.title, data.request_id)
+
+    @app.get('/api/conversations')
+    def list_conversations(request: Request, response: Response):
+        wid, actor, role = identity(request, response)
+        return {'conversations': app.state.conversations.list(wid, actor, role)}
+
+    @app.get('/api/conversations/{cid}')
+    def get_conversation(cid: str, request: Request, response: Response):
+        wid, actor, role = identity(request, response)
+        return app.state.conversations.get(wid, cid, actor, role)
+
+    @app.post('/api/conversations/{cid}/turns')
+    def conversation_turn(cid: str, data: TurnInput, request: Request, response: Response):
+        wid, actor, role = identity(request, response)
+        turn = app.state.conversations.reply(wid, cid, actor, role, **data.model_dump())
+        response.status_code = 202 if turn['status'] == 'pending' else 200
+        return turn
+
     @app.post('/api/tasks')
     def task(data: TaskInput, request: Request, response: Response):
         wid, actor, role = identity(request, response)
@@ -225,14 +243,14 @@ def create_app(store=None, ai=None, markdown_storage=None):
             def save(s):
                 run['stale'] = any(s['contexts'][x['id']]['revision'] != x['revision'] for x in manifest['sources'])
                 s['tasks'][run['id']] = deepcopy(run)
-                finish_usage(s, call_id, usage)
+                d.finish_usage(s, call_id, usage)
                 d.audit(s, actor, 'Task completed', None, f"Run {run['id']} · {len(manifest['sources'])} sources",
                         role=role, source_ids=[x['id'] for x in manifest['sources']])
             app.state.store.mutate(wid, save)
             return run
         except Exception as exc:
             def failed(s):
-                finish_usage(s, call_id, usage or getattr(exc, 'usage', None), failed=True)
+                d.finish_usage(s, call_id, usage or getattr(exc, 'usage', None), failed=True)
                 d.audit(s, actor, 'Model processing failed', None, 'Inspect usage and retry when available.',
                         role=role, outcome='failed', private_role=role)
             app.state.store.mutate(wid, failed)
@@ -249,14 +267,14 @@ def create_app(store=None, ai=None, markdown_storage=None):
             validated = ProposalInput(**candidate, sources=[data.source])
             def save(s):
                 result = d.propose(s, actor, role, validated.model_dump())
-                finish_usage(s, call_id, usage)
+                d.finish_usage(s, call_id, usage)
                 d.audit(s, actor, 'Notes extracted', result.get('context_id'), 'Candidate sent for independent review.',
                         role=role, private_role=role)
                 return result
             return app.state.store.mutate(wid, save)
         except Exception as exc:
             def failed(s):
-                finish_usage(s, call_id, usage or getattr(exc, 'usage', None), failed=True)
+                d.finish_usage(s, call_id, usage or getattr(exc, 'usage', None), failed=True)
                 d.audit(s, actor, 'Model processing failed', None, 'Inspect usage and retry when available.',
                         role=role, outcome='failed', private_role=role)
             app.state.store.mutate(wid, failed)
@@ -267,7 +285,10 @@ def create_app(store=None, ai=None, markdown_storage=None):
         wid, actor, role = identity(request, response)
         def export_visible(s):
             d.audit(s, actor, 'Evidence exported', None, 'Exported the persona-visible workspace.', role=role, private_role=role)
-            return d.snapshot(s, role)
+            result = d.snapshot(s, role, actor)
+            for item in result['conversations']:
+                item['turns'] = [deepcopy(s['tasks'][tid]) for tid in item['turn_ids']]
+            return result
         return app.state.store.mutate(wid, export_visible)
 
     @app.post('/api/activity')
@@ -279,10 +300,15 @@ def create_app(store=None, ai=None, markdown_storage=None):
                 d.audit(s, actor, 'Context inspected', item['id'], f"{item['title']} · v{item['revision']}", role=role)
             else:
                 task = s['tasks'].get(data.target_id)
-                if not task or not d.task_visible(s, task, role):
+                if (not task or not d.task_visible(s, task, role, actor)
+                        or task.get('conversation_id') and not d.conversation_visible(
+                            s, s.get('conversations', {}).get(task['conversation_id'], {}), role, actor)):
                     raise d.Problem('Run not found or unavailable.', 404)
                 d.audit(s, actor, 'Manifest inspected', None, f"Run {data.target_id}", role=role,
-                        source_ids=[x['id'] for x in task['manifest']['sources']])
+                        source_ids=[x['id'] for x in task['manifest']['sources']] + task['manifest'].get('history_source_ids', []),
+                        private_role=role if task.get('conversation_id') else None,
+                        private_actor=actor if task.get('conversation_id') else None,
+                        conversation_id=task.get('conversation_id'))
             return {'recorded': True}
         return app.state.store.mutate(wid, record)
 

@@ -8,13 +8,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/style.css?v=firebase-1">
-<script src="/assets/auth.js?v=firebase-1" defer></script>
+<link rel="stylesheet" href="/assets/style.css?v=session-3">
+<script src="/assets/auth.js?v=session-3" defer></script>
 <script src="/assets/context-map.js" defer></script>
 <script src="/assets/vendor/marked.js" defer></script>
 <script src="/assets/vendor/purify.js" defer></script>
 <script src="/assets/context-pages.js" defer></script>
-<script src="/assets/app.js?v=context-pages-1" defer></script>
+<script src="/assets/app.js?v=session-3" defer></script>
 </head>
 <body>
 <a href="#main" class="skip">Skip to workspace</a>
@@ -22,12 +22,13 @@
 <a class="brand" href="#overview"><span class="brand-icon">c<span>•</span></span>Context<span class="brand-os">OS</span></a>
 <div class="workspace-label">WORKSPACE</div>
 <div class="project-switch"><span class="project-mark" id="project-initial" aria-hidden="true">C</span><div class="project-switch-content"><label class="sr-only" for="workspace-project-select">Active project</label><select id="workspace-project-select" aria-label="Active project" aria-describedby="workspace-project-type" disabled><option value="">Loading projects…</option></select><small id="workspace-project-type">Shared knowledge</small></div><svg class="project-switch-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></div>
-<div class="workspace-label nav-label">PLATFORM</div>
+<div class="workspace-label nav-label">WORKSPACE</div>
 <nav aria-label="Main navigation" id="nav"></nav>
+<nav aria-label="Workspace tools" id="secondary-nav" class="secondary-nav"></nav>
 <div class="sidebar-bottom"><div class="sidebar-note"><span class="live-dot"></span> One shared understanding<p>Good context travels with<br>the work.</p></div><button class="export-btn" data-action="export">↗ Export workspace</button><div class="profile"><span class="avatar" id="profile-initial">D</span><div id="profile-label">Developer<small>Demo persona</small></div></div></div>
 </aside>
 <div class="shell">
-<header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong id="crumb">Overview</strong></div><div class="top-actions"><span class="mode-pill" id="mode">Connecting</span><button class="btn small" id="sign-out" data-action="sign-out" hidden>Sign out</button><label class="persona-label" for="persona">Viewing as</label><select id="persona" aria-label="Demo persona"><option value="developer">Developer</option><option value="pm">Product manager</option><option value="architect">Architect</option><option value="qa">QA engineer</option><option value="security">Security</option></select></div></header>
+<header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong id="crumb">Overview</strong></div><div class="top-actions"><span class="mode-pill" id="mode">Connecting</span><details id="workspace-tools" class="workspace-tools"><summary>More</summary><nav id="mobile-tools" aria-label="More workspace tools"></nav></details><button class="btn small" id="sign-out" data-action="sign-out" hidden>Sign out</button><label class="persona-label" for="persona">Viewing as</label><select id="persona" aria-label="Demo persona"><option value="developer">Developer</option><option value="pm">Product manager</option><option value="architect">Architect</option><option value="qa">QA engineer</option><option value="security">Security</option></select></div></header>
 <main id="main" tabindex="-1"><div class="loading">Opening your shared workspace…</div></main>
 <footer class="page-footer"><span>ContextOS · Shared intelligence for agentic teams</span><span id="footer-mode">Synthetic demo workspace</span></footer>
 </div>

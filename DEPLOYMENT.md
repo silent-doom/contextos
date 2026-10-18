@@ -4,6 +4,23 @@
 
 The application runs locally with SQLite and explicit offline rehearsal. Gemini, Firebase, and Firestore adapters exist but require live project configuration and verification. No cloud deployment or live Google AI result is claimed. GitHub is configured at silent-doom/contextos. Selected stack: Firebase Auth + Firestore + Cloud Run.
 
+## Selected target
+
+- Project: `contextos-512006`.
+- Operator account: `choudhary.faizan2002@gmail.com` (selected by owner).
+- CLI sign-in initiated using the normal browser flow. Initial lookup from the other locally active account was denied; correct-account access must be rechecked after authorization completes.
+- No APIs, billing, IAM grants, database, public exposure or deployment changed during this access check.
+
+For an explicit target check after signing in:
+
+```sh
+gcloud projects describe contextos-512006 --account choudhary.faizan2002@gmail.com
+gcloud services list --enabled --project contextos-512006 --account choudhary.faizan2002@gmail.com
+gcloud firestore databases list --project contextos-512006 --account choudhary.faizan2002@gmail.com
+```
+
+Select the database location only after inspecting existing resources; existing Firestore location is not changed casually. Default CLI settings are not a substitute for passing the selected project/account explicitly.
+
 ## Local configuration
 
 Python 3.14 is used for development and the container. Install `requirements.txt`. Configure environment variables explicitly in your shell (the app does not auto-load `.env`). `.env.example` documents options and contains no secrets.
@@ -76,6 +93,37 @@ Accounts must already have administrator-set custom claims. No self-signup role 
 A live provider test account, correct project ID and working ADC are still needed to verify this flow end-to-end. Local tests mock Firebase. `/api/auth/config` exposes only the public web key, mode, CSRF nonce and session lifetime; it never exposes model/service secrets. Contract: [design/specs/identity.md](design/specs/identity.md).
 
 ## Deployment acceptance checks
+
+### Repeatable two-user API verification
+
+Run `scripts/verify_collaboration.py` against a dedicated staging workspace after
+accounts and the service are configured. It exchanges two recent Firebase ID
+tokens for independent browser-style sessions, then verifies shared proposals,
+denied author approval, independent publication/audit, exact task snapshots,
+source-change warnings, reruns, fresh-session persistence and logout.
+
+Use a Developer author and a different Architect reviewer with the same trusted
+workspace claim. Supply `CONTEXTOS_AUTHOR_ID_TOKEN` and
+`CONTEXTOS_REVIEWER_ID_TOKEN` through a secure local environment mechanism; tokens
+must come from a sign-in within the previous five minutes. Do not place them in
+command arguments, shell history, source, screenshots or chat.
+
+```sh
+.venv/bin/python scripts/verify_collaboration.py --base-url https://YOUR-STAGING-ORIGIN
+```
+
+This creates a uniquely named synthetic Architecture topic, two proposals and
+two task runs, all retained for inspection. Live mode makes two model calls and
+can incur charges. Use a separate staging workspace with room within the normal
+storage/call limits. The command prints only generated IDs, revision and mode,
+not tokens, source bodies or model output; failures return a nonzero exit code.
+
+HTTPS is required except for loopback HTTP. Demo authentication is always
+rejected. `--allow-offline` explicitly permits an offline rehearsal with Firebase
+authentication and labels its evidence accordingly. Local regression tests mock
+Firebase and use SQLite; they are not live verification. The verifier does not
+test the password screen, redeployment durability, Firestore concurrency, backups
+or judge access; those remain separate acceptance gates below.
 
 - [ ] Container builds on Linux and runs as non-root.
 - [ ] `/api/health` reports intended AI/auth modes.

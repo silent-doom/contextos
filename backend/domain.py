@@ -1,6 +1,6 @@
 """Pure governed-memory domain. No HTTP or model authority here."""
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from hashlib import sha256
 import json
 import re
@@ -39,11 +39,32 @@ def context(state, cid, role):
     return item
 
 
-def audit(state, actor, action, cid, detail, *, role=None, outcome='completed', source_ids=None, private_role=None):
+def audit(state, actor, action, cid, detail, *, role=None, outcome='completed', source_ids=None, private_role=None, private_actor=None, conversation_id=None):
     state['events'].append({'id': uid('EVT'), 'at': now(), 'actor': actor,
                             'role': role, 'action': action, 'context_id': cid,
                             'detail': detail, 'outcome': outcome,
-                            'source_ids': list(source_ids or []), 'private_role': private_role})
+                            'source_ids': list(source_ids or []), 'private_role': private_role,
+                            'private_actor': private_actor, 'conversation_id': conversation_id})
+
+
+def reserve_usage(state, role, sources, kind, *, private_actor=None, conversation_id=None):
+    """Reserve every model attempt inside the caller's business transaction."""
+    if len(state['usage']) >= 50:
+        raise Problem('This workspace has reached its 50-call demo allowance. Export and start a new sandbox.', 429)
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=60)
+    if sum(datetime.fromisoformat(u['at']) > cutoff for u in state['usage']) >= 6:
+        raise Problem('Please wait a minute before making more model requests.', 429)
+    call_id = uid('CALL')
+    state['usage'].append({'id': call_id, 'at': now(), 'kind': kind, 'status': 'pending',
+                           'source_ids': list(sources), 'private_role': role if kind in ('extraction', 'conversation') else None,
+                           'private_actor': private_actor, 'conversation_id': conversation_id})
+    return call_id
+
+
+def finish_usage(state, call_id, usage=None, failed=False):
+    entry = next(u for u in state['usage'] if u['id'] == call_id)
+    entry.update(usage or {})
+    entry['status'] = 'completed' if usage is not None and not failed else 'failed'
 
 
 def seed():
@@ -144,7 +165,8 @@ def review(state, actor, role, pid, expected_hash, decision):
     p.update(status='published', reviewer=actor, reviewed_at=now())
     affected = affected_contexts(state, cid)
     for task in state['tasks'].values():
-        if any(s['id'] in affected for s in task['manifest']['sources']):
+        source_ids = {s['id'] for s in task['manifest']['sources']} | set(task['manifest'].get('history_source_ids', []))
+        if source_ids & affected:
             task['stale'] = True
     audit(state, actor, 'Revision published', cid, f"{item['title']} → v{item['revision']}", role=role)
     return deepcopy(p)
@@ -182,27 +204,47 @@ def assemble(state, role, query, budget):
     return {'sources': json.loads(payload), 'context_payload': payload, 'estimated_tokens': estimate(payload), 'baseline_estimated_tokens': estimate(source_payload(allowed)), 'budget': budget, 'estimator': 'UTF-8 bytes (conservative upper-bound estimate, not model tokenization)', 'created_at': now()}
 
 
-def task_visible(state, task, role):
-    return all(s['id'] in state['contexts'] and visible(state['contexts'][s['id']], role) for s in task['manifest']['sources'])
+def task_visible(state, task, role, actor=None):
+    if task.get('conversation_id') and (task['actor'] != actor or task['role'] != role):
+        return False
+    sources = {s['id'] for s in task['manifest']['sources']} | set(task['manifest'].get('history_source_ids', []))
+    return all(cid in state['contexts'] and visible(state['contexts'][cid], role) for cid in sources)
 
 
-def snapshot(state, role):
+def conversation_visible(state, conversation, role, actor):
+    return bool(conversation and conversation['actor'] == actor and conversation['role'] == role
+            and all(tid in state['tasks'] and task_visible(state, state['tasks'][tid], role, actor)
+                    for tid in conversation['turn_ids']))
+
+
+def snapshot(state, role, actor=None):
     allowed = {k: deepcopy(v) for k, v in state['contexts'].items() if visible(v, role)}
     proposals = [deepcopy(p) for p in state['proposals'].values() if not p['context_id'] or p['context_id'] in allowed]
     for p in proposals:
         item = allowed.get(p['context_id'])
         p['before'] = next((h['body'] for h in item['history'] if h['revision'] == p['base_revision']), '') if item else ''
-    tasks = [deepcopy(t) for t in state['tasks'].values() if task_visible(state, t, role)]
+    conversations = [deepcopy(c) for c in state.get('conversations', {}).values()
+                     if conversation_visible(state, c, role, actor)]
+    conversation_ids = {c['id'] for c in conversations}
+    tasks = [deepcopy(t) for t in state['tasks'].values() if task_visible(state, t, role, actor)
+             and t.get('status', 'succeeded') == 'succeeded'
+             and (not t.get('conversation_id') or t['conversation_id'] in conversation_ids)]
     events = [deepcopy(e) for e in state['events']
               if (not e['context_id'] or e['context_id'] in allowed)
               and all(cid in allowed for cid in e.get('source_ids', []))
-              and (not e.get('private_role') or e['private_role'] == role)]
+              and (not e.get('private_role') or e['private_role'] == role)
+              and (not e.get('private_actor') or e['private_actor'] == actor)
+              and (not e.get('conversation_id') or e['conversation_id'] in conversation_ids)]
     for event in events:
         legacy_role = event['actor'].removeprefix('demo-')
         if not event.get('role') and legacy_role in ROLES:
             event['role'] = legacy_role
-    usage = [u for u in state['usage'] if all(cid in allowed for cid in u.get('source_ids', [])) and (not u.get('private_role') or u['private_role'] == role)]
-    return {'project': state['project'], 'role': role, 'contexts': list(allowed.values()), 'proposals': proposals, 'tasks': tasks, 'events': events[-100:][::-1], 'usage': usage}
+    usage = [u for u in state['usage'] if all(cid in allowed for cid in u.get('source_ids', []))
+             and (not u.get('private_role') or u['private_role'] == role)
+             and (not u.get('private_actor') or u['private_actor'] == actor)
+             and (not u.get('conversation_id') or u['conversation_id'] in conversation_ids)]
+    return {'project': state['project'], 'role': role, 'contexts': list(allowed.values()), 'proposals': proposals,
+            'tasks': tasks, 'conversations': conversations, 'events': events[-100:][::-1], 'usage': usage}
 
 
 TASK_GOALS = {
@@ -216,7 +258,7 @@ TASK_GOALS = {
 
 def next_actions(state, role, actor):
     """Permission-scoped suggestions only; every execution keeps its normal gate."""
-    view = snapshot(state, role)
+    view = snapshot(state, role, actor)
     actions = []
     owned = [p for p in view['proposals'] if p['status'] == 'pending'
              and OWNERS[p['domain']] == role and p['author'] != actor]

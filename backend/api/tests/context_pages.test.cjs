@@ -386,4 +386,3 @@ test('camera state survives replacement and old gesture handlers/captures are re
   assert.equal(first.snapshots.length,snapshotCount,'Detached map handlers cannot update the next view');
   next.controller.destroy();
 });
-

@@ -66,3 +66,69 @@ Theme restoration verification (15 October): 42 tests pass; JavaScript syntax pa
 Selected-store preparation: five tests cover unknown backend rejection, empty real-account vs seeded demo initialization, data preservation, Cloud Run SQLite refusal, explicit Firestore project requirement and factory initializer. Total: 55 Python + 4 Node tests. Firestore rules/index JSON parse and verifier CLI help checked; actual transaction/emulator/live verification remains open.
 
 Final identity/storage checkpoint: 56 Python tests + 4 Node auth contract tests pass. Added a regression showing that logout clears the browser session even when its audit write fails. Live provider/cloud checks remain pending.
+
+18 October collaboration-verifier slice: 66 Python tests + 4 Node auth contract
+tests pass. Ten new cases exercise the staging verifier against independent
+FastAPI cookie sessions, mocked Firebase, offline AI and an empty SQLite
+workspace. Coverage includes shared v1/v2 knowledge, independent owner review,
+publication attribution, stale snapshots, fresh-session history, logout, wrong
+identity/role/tenant rejection, explicit offline labeling, credential redaction
+and unsafe origin rejection. CLI help, repository checks and diff whitespace
+pass. Two existing upstream deprecation warnings remain. No live Firebase,
+Gemini, Firestore, deployment or browser sign-in was tested by this slice.
+
+Workspace simplification: 66 Python tests and 11 Node contract tests pass. Seven
+new controller tests run the shipped app.js with DOM sinks/API fixtures: primary
+and legacy routes, secondary/mobile tool links, owner/actor-scoped attention,
+original run source inspection, draft/budget persistence and protected cleanup,
+Inbox refresh/history controls, Knowledge search/domain filtering, and rejection
+of workspace responses that arrive after protected-session cleanup. The new
+checks found and fixed a pre-existing missing filteredKnowledge function. CI now
+runs both Node files. Syntax, asset serving, repository hygiene and diff checks
+pass. No connected browser was available for new layout, responsive or keyboard
+visual verification; fixture tests do not replace that evidence.
+
+Conversation-backend slice: 85 Python + 11 Node contract tests pass. Seventeen
+new conversation cases cover persisted reopening, exact follow-up history/source
+references, idempotent creation/turns, known-usage failure/retry, redacted errors,
+actual simultaneous requests, pending deduplication, expired-attempt fencing,
+explicit stale refresh and preserved snapshots, source changes during inference,
+revoked-source/actor/role/tenant privacy across history/activity/exports, bounded
+history/output, quota/preflight rollback and turn limits. Two AI contract cases
+check separation of accepted context from working notes and offline labeling.
+All provider calls are mocked/offline; this is backend evidence, without new
+browser or live Firestore/Gemini claims. The existing two dependency deprecation
+warnings remain. Standalone task and browser-controller regressions still pass.
+Restarted the local offline service on port 8000 and verified health/page serving,
+saved follow-up history, reopen and duplicate retry through HTTP in a separate
+synthetic sandbox. Two offline attempts were recorded; no cloud call was made.
+
+Overview restoration: 85 Python + 16 Node tests pass. Controller checks cover the
+four-tab/default routing, required-source priority and revision evidence, personal
+scope, escaped content, original-run inspection, honest empty/failure states,
+author/reviewer proposal conflicts, correct Inbox filters, entry/manual refresh
+and late Overview responses after protected cleanup. The fixture now normalizes
+location.hash like a browser. Updated page/JS/CSS serve through FastAPI; CSS
+braces/variables and Critical badge contrast (6.20:1) pass. No connected browser
+was available for new visual/responsive verification. Existing warnings remain.
+
+Shared-knowledge merge repair: reproduced the CI failure on branch head 2976e21
+(4 auth passes, 12 workspace failures). The fixture did not load context-pages;
+the merged renderer also retained old task/review names, lost Inbox initialization
+and secondary navigation, and omitted the protected refresh-generation increment.
+Restored the controller integration while preserving /knowledge, legacy aliases,
+query strings, browser history and real context-page mounting/cleanup.
+
+Node 24.18.0: all 36 JavaScript checks pass (22 root browser contracts plus 14
+existing context-page/map cases). Six integration regressions cover direct paths,
+history/aliases, Knowledge link routing, late requests after navigation/sign-out
+and 401 handoff. Fixtures load the shipped map/page modules and model browser
+location/history. CI now runs both modules' syntax checks and the context suite.
+The default Python suite passes all 85 cases with the two existing warnings;
+rehearsal, repository hygiene, served-asset and diff checks pass. Hosted CI must
+run on the correction commit; no new visual-browser, container or live-provider
+verification is claimed.
+
+18 October sign-in copy: browser DOM confirms product-only sign-in text, no provider/setup branding. Auth Node contract tests and JavaScript syntax checks pass. Cloud project access attempt using the prior account was denied; selected-account browser authorization is pending. No live sign-in/deployment was verified by that attempt.
+
+18 October integration: 100 Python tests (including backend API and real MCP stdio/loopback integration), 36 Node tests, repository hygiene and governed rehearsal pass. CI installs backend/mcp/requirements.txt alongside root constraints and discovers backend/api/tests through pytest.ini. No tests skipped; two upstream deprecation warnings remain. GitHub main runs 39146703870 and 39146920029 succeeded before this integration.

@@ -49,10 +49,72 @@ This proves domain behavior without changing user data. The conflict scenario mo
 
 Audit records optional role, outcome, source_ids and private_role, compatible with older events. Snapshot applies both direct context visibility and source dependency visibility to events. Task/inspection events reference all manifest sources. Domain failures are persisted in a separate transaction after the rejected mutation rolls back, without hidden target IDs or submitted content. A full workspace may prevent that append; original error responses are preserved. Prototype logging is not a tamper-proof compliance store.
 
-Theme restoration: visual rules come from 4e1bd51; new action components use its existing semantic tokens. Font CSS and binaries are allowed only from fonts.googleapis.com and fonts.gstatic.com; system fallbacks keep UI usable offline. No JavaScript/business behavior was reverted.
+Current theme (18 October): royal-blue navigation and accents, an off-white canvas, white cards, and pale-blue interactive surfaces replace the earlier brown/beige palette. Typography and layout remain from 4e1bd51 and the subsequent action-first work. Shared CSS tokens cover workspace and sign-in surfaces, with lighter sidebar accents for contrast. Font CSS and binaries are allowed only from fonts.googleapis.com and fonts.gstatic.com; system fallbacks keep UI usable offline.
 
 ## Selected Firebase identity and storage (18 October)
 
 Owner chose Firebase Auth + Firestore + Cloud Run. Identity contract is design/specs/identity.md; Firebase-mode browser sessions use HttpOnly eight-hour cookies and CSRF-bound exchange, with trusted workspace/role claims and per-request revocation checks. Browser credentials go to Firebase REST and no ID/refresh tokens are persisted. The existing Bearer interface remains for API consumers.
 
 Store initialization now distinguishes real empty workspaces from synthetic demo baselines, without modifying existing records. Firestore client rules deny direct browser access; server-side access uses IAM plus domain checks. The bounded JSON aggregate and atomic transaction boundary are retained. Supabase is not the selected provider; migration/normalization and live multi-instance/restore evidence remain separate work.
+
+The collaboration verifier is an external API client, not a second implementation
+of domain rules. An injected client factory runs the same scenario against local
+TestClient sessions or staging HTTP. Authentication, publication, retrieval and
+audit stay behind the existing service boundary. Tokens enter only through the
+operator environment; output excludes credentials and content. Offline mode
+requires an explicit flag. No application endpoints or storage schema changed.
+
+## Decision ADR-005: three primary workspace destinations
+
+Work, Knowledge and Inbox use the existing filtered workspace snapshot and API.
+A single route resolver preserves overview/tasks/reviews links; activity/usage
+and demo remain secondary. UI helpers project independent owned reviews and
+affected personal runs for attention counts; the server continues to authorize
+every action. Work's source panel reads the selected run's immutable manifest,
+not the latest accepted body. Drafts/budgets use session storage and clear with
+protected buffers. No new backend service, schema or publication authority was
+introduced. These are standalone runs, not persisted chat conversations.
+
+## Decision ADR-006: private conversations through an application service
+
+ConversationService coordinates the existing transactional workspace store and
+AI adapter. FastAPI validates identity/input; pure domain helpers enforce source
+visibility, stale dependencies and shared call quotas. Accepted project memory
+remains shared; task transcripts are private to their creator and fixed role.
+Old aggregate payloads gain conversation metadata lazily and reuse the tasks
+collection for ordered per-turn runs. Standalone tasks remain compatible.
+
+Each turn reserves quota and an attempt lease atomically, invokes the model
+outside the transaction, then atomically records outcome/usage/audit. Request
+keys deduplicate turns; attempt IDs fence late results after lease recovery.
+Retries retain the original manifest. Historical messages reference immutable
+turns and remain untrusted working state; explicit refresh starts a new segment
+against current accepted context. Every history source is reauthorized, including
+in exports/activity; revocation hides the entire conversation conservatively.
+History/output and workspace caps fail visibly rather than silently truncate.
+See design/specs/conversations.md for API, recovery semantics and prototype limits.
+This slice adds the backend only; the chat UI and live cloud checks remain open.
+
+## Decision ADR-007: restore an actionable project overview
+
+Owner requested Overview back alongside Work, Knowledge and Inbox, superseding
+ADR-005's three-link navigation and Overview alias. Overview is the default route
+and uses the existing permission-filtered workspace snapshot; no new API/storage
+or policy authority is introduced. The controller projects personal actions and
+visible project counts without changing accepted knowledge. Critical means a
+stale personal run loaded a required source whose accepted revision changed;
+details identify that source and both revisions. Other reviews, base conflicts,
+latest failed calls and stale runs retain descriptive labels. Inspection uses
+the original run, and review links open the appropriate Inbox filter. Snapshot
+refresh shares the protected-generation guard used by Inbox and Activity.
+
+## Controller integration with shared-knowledge pages
+
+The route resolver normalizes /knowledge and contextpages/tasks/reviews aliases
+to current workspace views. Rendering retains current navigation/dispatch and
+clears the shared-knowledge module before mounting its next root. Browser history
+updates preserve query strings. Protected cleanup increments the workspace
+generation and clears the page module, whose own generation cancels pending
+loads. Integration fixtures load both real modules and supply location/history;
+CI runs these contracts alongside the context-page/map suite. This repairs the
+merge boundary without changing backend authority or context storage.

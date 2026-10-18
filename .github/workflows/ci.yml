@@ -30,12 +30,14 @@ jobs:
         with:
           python-version: '3.14'
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: |
+            requirements.txt
+            backend/mcp/requirements.txt
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+        run: python -m pip install -r requirements.txt -r backend/mcp/requirements.txt
       - name: Check repository hygiene
         run: python scripts/check_repo.py
       - name: Run offline regression suite
@@ -44,7 +46,9 @@ jobs:
         run: |
           node --check web/app.js
           node --check web/auth.js
-          node --test tests/browser_auth.test.cjs
+          node --check web/context-map.js
+          node --check web/context-pages.js
+          node --test tests/browser_*.test.cjs backend/api/tests/context_pages.test.cjs
       - name: Rehearse the governed workflow
         run: python scripts/rehearsal.py
 
