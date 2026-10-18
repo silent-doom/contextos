@@ -21,7 +21,7 @@ const roleNames = {developer:'Developer',pm:'Product manager',architect:'Archite
 const owners = {Requirements:'pm',Architecture:'architect',Implementation:'developer',Quality:'qa',Security:'security'};
 const navItems = [['overview','Overview','overview'],['work','Work','tasks'],['knowledge','Knowledge','knowledge'],['inbox','Inbox','reviews']];
 const secondaryItems = [['insights','Activity & usage','insights'],['demo','Walkthroughs','demo']];
-const routeAliases = {tasks:'work',reviews:'inbox'};
+const routeAliases = {tasks:'work',reviews:'inbox',contextpages:'knowledge'};
 function resolveView(view) {
   return Object.hasOwn(routeAliases,view) ? routeAliases[view] : ([...navItems,...secondaryItems].some(([id]) => id === view) ? view : 'overview');
 }
@@ -29,7 +29,7 @@ function viewLabel(view) {
   return [...navItems,...secondaryItems].find(([id]) => id === resolveView(view))[1];
 }
 let state, activeRun, selectedContext, toastTimer, queryFilter = '', domainFilter = 'All domains';
-let currentView = viewFromUrl();
+let currentView = viewFromUrl(), inboxFilter = 'pending';
 let busy = false;
 let demoPositions = {}, demoCompleted = {};
 let demoCatalog = [], demoRole = 'all', demoCategory = 'All cases', demoSelected = 'handoff', demoReports = {}, demoRunning = null;
@@ -82,7 +82,7 @@ function btn(label, action, primary = false, attrs = '') {
 }
 function viewFromUrl() {
   const view = location.hash.slice(1);
-  return view === 'contextpages' ? 'knowledge' : view || (location.pathname === '/knowledge' ? 'knowledge' : 'overview');
+  return resolveView(view || (location.pathname === '/knowledge' ? 'knowledge' : 'overview'));
 }
 function syncViewUrl() {
   const path = currentView === 'knowledge' ? '/knowledge' : location.pathname === '/knowledge' ? '/' : null;
@@ -91,8 +91,8 @@ function syncViewUrl() {
   if (location.pathname + location.search + location.hash !== url) history.replaceState(history.state, '', url);
 }
 function go(view) {
-  view = view === 'contextpages' ? 'knowledge' : view;
-  if (currentView === view) render(); else location.hash = view;
+  const target = resolveView(view);
+  if (currentView === target) render(); else location.hash = target;
 }
 function formatTime(value) { return new Date(value).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
 function eventRows(events) {
@@ -102,13 +102,16 @@ function stat(label, value, description, glyph) { return `<div class="stat"><div
 function render() {
   if (!state) return;
   window.contextPages.clear();
-  const visibleNav = navItems;
-  if (!visibleNav.some(x => x[0] === currentView)) currentView = 'overview';
+  currentView = resolveView(currentView);
   syncViewUrl();
-  const pending = state.proposals.filter(p => p.status === 'pending').length;
-  $('#nav').innerHTML = visibleNav.map(([id,label]) => `<a href="${id === 'knowledge' ? '/knowledge' : '#' + id}" class="nav-item ${currentView === id ? 'active' : ''}" ${currentView === id ? 'aria-current="page"' : ''} title="${label}">${icon(id)}<span class="nav-text">${label}</span>${id === 'reviews' && pending ? `<span class="nav-badge">${pending}</span>` : ''}</a>`).join('');
-  $('#crumb').textContent = visibleNav.find(x => x[0] === currentView)[1];
-  $('#main').innerHTML = ({overview, knowledge, tasks, reviews, insights, demo})[currentView]();
+  const attention = attentionCount();
+  const link = ([id,label,glyph]) => `<a href="${id === 'knowledge' ? '/knowledge' : '#' + id}" class="nav-item ${currentView === id ? 'active' : ''}" ${currentView === id ? 'aria-current="page"' : ''} title="${label}">${icon(glyph)}<span class="nav-text">${label}</span>${id === 'inbox' && attention ? `<span class="nav-badge" aria-label="${attention} items need your attention">${attention}</span>` : ''}</a>`;
+  $('#nav').innerHTML = navItems.map(link).join('');
+  const tools = secondaryItems.filter(([id]) => id !== 'demo' || state.auth_mode === 'demo').map(link).join('');
+  $('#secondary-nav').innerHTML = tools;
+  $('#mobile-tools').innerHTML = tools;
+  $('#crumb').textContent = viewLabel(currentView);
+  $('#main').innerHTML = ({overview, work, knowledge, inbox, insights, demo})[currentView]();
   if (currentView === 'knowledge' && state.context_pages_enabled) window.contextPages.mount($('#context-pages'), async () => {toast('Proposal created. Open project proposals for independent review.');}, message => showSignIn(message));
   else if (currentView === 'knowledge') $('#search').value = queryFilter;
 }
@@ -309,6 +312,7 @@ function addKnowledge() {
     <form id="manual-proposal-form" class="gap-top" hidden><label class="field">Topic title<input name="title" required maxlength="120"></label><label class="field">Domain<select name="domain">${Object.keys(owners).map((domain,index) => `<option${index === 0 ? ' selected' : ''}>${domain}</option>`).join('')}</select></label><label class="field">Proposed content<textarea name="body" required maxlength="10000" class="tall"></textarea></label><label class="field">Reason for this topic<input name="reason" required maxlength="1500"></label><label class="field">Source reference<input name="source" required maxlength="200"></label><div class="note">No model call is needed. An independent reviewer who owns this domain must approve your proposal. New topics use the Reviewed policy and are visible to project members after publication.</div><button type="submit" class="btn primary">Send manual proposal for review</button></form>`);
 }
 function clearProtectedView() {
+  protectedVersion++;
   window.contextPages.clear();
   state = undefined; activeRun = undefined; selectedContext = undefined;
   queryFilter = ''; domainFilter = 'All domains'; inboxFilter = 'pending';
@@ -466,10 +470,11 @@ $('#dialog').addEventListener('click', e => {
 });
 async function routeChanged() {
   const next = viewFromUrl();
+  $('#workspace-tools').open = false;
   if (next === currentView) {syncViewUrl(); return;}
   currentView = next;
   window.scrollTo({top:0,behavior:'instant'});
-  if (currentView === 'insights') {try {await refresh();} catch(error) {toast(error.message,true);}}
+  if (['overview','inbox','insights'].includes(currentView) && state) {try {await refresh();} catch(error) {toast(error.message,true);}}
   else render();
 }
 window.addEventListener('hashchange', routeChanged);

@@ -111,3 +111,20 @@ and late Overview responses after protected cleanup. The fixture now normalizes
 location.hash like a browser. Updated page/JS/CSS serve through FastAPI; CSS
 braces/variables and Critical badge contrast (6.20:1) pass. No connected browser
 was available for new visual/responsive verification. Existing warnings remain.
+
+Shared-knowledge merge repair: reproduced the CI failure on branch head 2976e21
+(4 auth passes, 12 workspace failures). The fixture did not load context-pages;
+the merged renderer also retained old task/review names, lost Inbox initialization
+and secondary navigation, and omitted the protected refresh-generation increment.
+Restored the controller integration while preserving /knowledge, legacy aliases,
+query strings, browser history and real context-page mounting/cleanup.
+
+Node 24.18.0: all 36 JavaScript checks pass (22 root browser contracts plus 14
+existing context-page/map cases). Six integration regressions cover direct paths,
+history/aliases, Knowledge link routing, late requests after navigation/sign-out
+and 401 handoff. Fixtures load the shipped map/page modules and model browser
+location/history. CI now runs both modules' syntax checks and the context suite.
+The default Python suite passes all 85 cases with the two existing warnings;
+rehearsal, repository hygiene, served-asset and diff checks pass. Hosted CI must
+run on the correction commit; no new visual-browser, container or live-provider
+verification is claimed.

@@ -82,16 +82,18 @@ From the repository root:
 .venv/bin/pytest -q
 node --check web/app.js
 node --check web/auth.js
-node --test tests/browser_*.test.cjs
+node --check web/context-map.js
+node --check web/context-pages.js
+node --test tests/browser_*.test.cjs backend/api/tests/context_pages.test.cjs
 .venv/bin/python scripts/rehearsal.py
 .venv/bin/python scripts/check_repo.py
 ```
 
 Windows: use `.\.venv\Scripts\python.exe -m pytest -q` and the same Python executable for the helper scripts.
 
-**85 Python tests and 16 Node contract tests pass locally.** Google service calls are mocked in adapter tests. The current navigation is checked with DOM/API fixtures; a connected browser was unavailable for new visual QA. Earlier mobile/desktop browser evidence is historical. [Verification details and limits →](TESTING.md)
+**85 Python tests and 36 Node contract tests pass locally.** The Node checks include shared-knowledge integration and the context-page/map suite. Google service calls are mocked in adapter tests. Navigation is checked with DOM/API fixtures; connected-browser visual verification remains a separate check. [Verification details and limits →](TESTING.md)
 
-GitHub Actions is configured to run tests, repository checks, JavaScript syntax validation, and a Linux container build after the repository is pushed. The latest hosted workflow outcome is **not verified in this session**; its configuration alone is not evidence of a successful Linux/cloud deployment.
+GitHub Actions runs tests, repository checks, JavaScript syntax validation and a Linux container build. The shared-knowledge merge exposed a frontend integration failure; the correction passes locally and awaits hosted CI on the fix commit. Local checks alone do not establish a successful Linux/cloud deployment.
 
 ## Architecture
 

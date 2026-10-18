@@ -5,13 +5,16 @@ const fs = require('node:fs');
 const source = fs.readFileSync('web/app.js','utf8');
 
 // Run the shipped controller with DOM sinks and API fixtures, without a browser.
-function workspace(fixture) {
+function workspace(fixture, {url='http://testserver/', contextResponses={}}={}) {
   const elements = new Map(), handlers = {document:{},window:{}}, storage = new Map(), calls = [];
-  let hash='';
-  const location={get hash(){return hash;},set hash(value){hash=value && !value.startsWith('#') ? `#${value}` : value;}};
+  let currentUrl=new URL(url);
+  const location={get hash(){return currentUrl.hash;},set hash(value){currentUrl.hash=value;},
+    get pathname(){return currentUrl.pathname;},get search(){return currentUrl.search;}};
+  const history={state:null,replaceState(state,title,url){this.state=state;currentUrl=new URL(url,currentUrl);}};
   function element(selector) {
     if (!elements.has(selector)) elements.set(selector, {
       innerHTML:'',textContent:'',value:'',open:false,classList:{add(){},remove(){},toggle(){}},
+      isConnected:true,querySelector(){return null;},querySelectorAll(){return [];},
       addEventListener(){},replaceChildren(){this.innerHTML='';},close(){this.open=false;},
       showModal(){this.open=true;},focus(){},scrollIntoView(){}
     });
@@ -22,15 +25,19 @@ function workspace(fixture) {
       body:element('body'),getElementById:id=>element(`#${id}`)},
     window:{addEventListener:(name,fn)=>handlers.window[name]=fn,scrollTo(){},
       contextosIdentity:{configuration:()=>new Promise(()=>{})}},
-    location,sessionStorage:{getItem:key=>storage.get(key)??null,
+    location,history,sessionStorage:{getItem:key=>storage.get(key)??null,
       setItem:(key,value)=>storage.set(key,String(value)),removeItem:key=>storage.delete(key)},
     requestAnimationFrame:fn=>fn(),setTimeout:()=>1,clearTimeout(){},
     fetch:async (url,options)=>{
       calls.push({url,options});
-      const body = url==='/api/workspace' ? context.fixture : {recorded:true};
+      const body = url==='/api/workspace' ? context.fixture : Object.hasOwn(contextResponses,url) ? contextResponses[url]
+        : url==='/api/context/projects?include_archived=true' ? [] : {recorded:true};
       return {ok:true,json:async()=>body};
     },fixture
   });
+  // Load the shipped modules in the same order as index.html, including cleanup.
+  vm.runInContext(fs.readFileSync('web/context-map.js','utf8'),context);
+  vm.runInContext(fs.readFileSync('web/context-pages.js','utf8'),context);
   vm.runInContext(source,context);
   return {element,handlers,storage,calls,context,
     run:code=>vm.runInContext(code,context),
@@ -58,7 +65,7 @@ test('Overview is the landing page and four primary destinations preserve task/r
     assert.equal(page.element('#crumb').textContent,'Overview');
     assert.match(page.element('#main').innerHTML,/Needs your attention/);
     assert.doesNotMatch(page.element('#main').innerHTML,/id="task-form"/);
-    assert.deepEqual([...page.element('#nav').innerHTML.matchAll(/href="#([^"]+)"/g)].map(m=>m[1]),['overview','work','knowledge','inbox']);
+    assert.deepEqual([...page.element('#nav').innerHTML.matchAll(/href="([^"]+)"/g)].map(m=>m[1]),['#overview','#work','/knowledge','#inbox']);
     assert.match(page.element('#nav').innerHTML,/href="#overview" class="nav-item active" aria-current="page"/);
   }
   for (const route of ['tasks', 'work']) {
@@ -232,6 +239,85 @@ test('Knowledge search combines text and domain filters without replacing the se
   assert.match(page.element('#knowledge-results').innerHTML,/Retry design/);
   assert.doesNotMatch(page.element('#knowledge-results').innerHTML,/Payment requirement/);
   assert.equal(page.element('#search'),search);
+});
+
+test('direct Knowledge URLs mount the real context-pages module and preserve the query',async()=>{
+  const fixture={...state(),context_pages_enabled:true};
+  const page=workspace(fixture,{url:'http://testserver/knowledge?project=checkout'});
+  assert.equal(page.run('currentView'),'knowledge');
+  page.render('knowledge');
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(page.context.location.pathname,'/knowledge');
+  assert.equal(page.context.location.search,'?project=checkout');
+  assert.equal(page.context.location.hash,'');
+  assert.match(page.element('#main').innerHTML,/id="context-pages"/);
+  assert.match(page.element('#context-pages').innerHTML,/Create your first project/);
+  assert.match(page.element('#nav').innerHTML,/href="\/knowledge" class="nav-item active"/);
+  assert.deepEqual(page.calls.map(call=>call.url),['/api/context/template','/api/context/projects?include_archived=true']);
+});
+
+test('legacy Knowledge/task routes and popstate retain canonical paths and Inbox filters',async()=>{
+  const page=workspace(state(),{url:'http://testserver/knowledge?project=checkout#tasks'});
+  page.render('tasks');
+  assert.equal(page.context.location.pathname,'/');
+  assert.equal(page.context.location.hash,'#work');
+  assert.equal(page.context.location.search,'?project=checkout');
+  assert.match(page.element('#main').innerHTML,/id="task-form"/);
+  page.context.location.hash='#contextpages';await page.handlers.window.hashchange();
+  assert.equal(page.context.location.pathname,'/knowledge');
+  assert.equal(page.context.location.hash,'');
+  assert.equal(page.element('#crumb').textContent,'Knowledge');
+  page.context.history.replaceState(null,'','/?project=checkout#reviews');
+  await page.handlers.window.popstate();
+  assert.equal(page.element('#crumb').textContent,'Inbox');
+  assert.equal(page.run('inboxFilter'),'pending');
+  assert.match(page.element('#mobile-tools').innerHTML,/href="#insights"/);
+});
+
+test('a plain Knowledge link click uses the app router and closes mobile tools',async()=>{
+  const page=workspace(state());page.render('overview');
+  page.element('#workspace-tools').open=true;
+  let prevented=false;
+  await page.handlers.document.click({button:0,preventDefault(){prevented=true;},
+    target:{closest:selector=>selector==='a[href="/knowledge"]' ? {} : null}});
+  await page.handlers.window.hashchange();
+  assert.equal(prevented,true);
+  assert.equal(page.context.location.pathname,'/knowledge');
+  assert.equal(page.element('#workspace-tools').open,false);
+  assert.equal(page.element('#crumb').textContent,'Knowledge');
+});
+
+for (const exit of ['navigation','sign-out']) test(`pending shared-knowledge requests are discarded after ${exit}`,async()=>{
+  let deliver;
+  const pending=new Promise(resolve=>deliver=resolve);
+  const page=workspace({...state(),context_pages_enabled:true},{contextResponses:{'/api/context/template':pending}});
+  page.render('knowledge');
+  const root=page.element('#context-pages'),original=root.innerHTML;
+  if (exit==='navigation') {
+    await page.run('action({dataset:{action:"navigate",view:"work"}})');
+    await page.handlers.window.hashchange();
+  } else page.run('clearProtectedView()');
+  deliver({content:'Protected context that arrived too late'});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(root.innerHTML,original);
+  assert.equal(page.calls.filter(call=>call.url.startsWith('/api/context/')).length,1);
+  if (exit==='navigation') assert.match(page.element('#main').innerHTML,/id="task-form"/);
+  else {
+    assert.equal(page.run('state'),undefined);
+    assert.equal(page.element('#main').innerHTML,'');
+  }
+});
+
+test('a context-pages 401 clears the workspace and opens the existing sign-in flow',async()=>{
+  const page=workspace({...state(),context_pages_enabled:true});
+  page.run('identityConfig={auth_mode:"firebase",login_ready:true}');
+  page.context.fetch=async()=>({ok:false,status:401,json:async()=>({detail:'Sign in again'})});
+  page.render('knowledge');
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(page.run('state'),undefined);
+  assert.equal(page.element('#nav').innerHTML,'');
+  assert.match(page.element('#main').innerHTML,/Sign in again/);
+  assert.match(page.element('#main').innerHTML,/id="login-form"/);
 });
 
 for (const route of ['inbox','overview']) test(`a late ${route} response cannot restore protected content after sign-out`,async()=>{
