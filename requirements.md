@@ -61,3 +61,16 @@ Conversation backend (18 October): persist private actor/role-scoped task conver
 ## Person 3 workstream — 18 October
 
 See PERSON3_DELIVERY.md for the proposed capability map and measurable acceptance criteria, P3-01 through P3-11. Real sign-in/session/logout, authoritative identity handoff, managed persistence, relationship UI, conversation UX, dedicated activity, readiness, CI promotion, secrets, monitoring and judge access are tracked separately. Preserve current governance/privacy and the selected royal-blue/off-white palette with existing typography. Provider selection is open: recommend Firebase/Firestore/Cloud Run to reuse existing adapters; Supabase Auth/Postgres on Cloud Run is an explicit alternative. No cloud resources are provisioned by this planning task.
+
+Project integration (18 October): approved project pages must be the same canonical
+sources consumed by project-scoped Work, Overview and Inbox. Proposals stay out
+of model input until independent exact-hash publication. Keep old workspaces and
+projects isolated, retain immutable per-turn bodies, and flag affected work when
+requirements/security change, including newly introduced mandatory rules.
+Private conversation UI must reopen saved work, continue with bounded history,
+reuse request keys on failure/pending recovery, inspect individual turns and
+require explicit refresh after context changes. Session cleanup discards pending
+responses and cancels polling. Keep project selection in the existing Knowledge
+view and the header compact. Do not add demo examples, setup endpoints or
+promotional controls; the user owns the live demo. This supersedes the earlier
+backend-only conversation UI status; live cloud validation remains open.

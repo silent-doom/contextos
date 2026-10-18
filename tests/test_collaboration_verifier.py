@@ -56,6 +56,35 @@ def test_two_independent_sessions_share_accepted_context_and_preserve_snapshots(
     assert 'author-token' not in str(evidence) and 'reviewer-token' not in str(evidence)
 
 
+def test_two_authenticated_members_use_the_same_knowledge_pages_in_private_work(collaboration):
+    factory, members, store = collaboration
+    author, reviewer = factory(), factory()
+    for client, token in ((author, 'author-token'), (reviewer, 'reviewer-token')):
+        client.headers.update({'Authorization': f'Bearer {token}', 'X-ContextOS-Client': 'workspace'})
+    project = author.post('/api/context/projects', json={'name': 'Team handoff', 'project_type': 'Software'}).json()
+    pid = project['id']
+    base = f'/api/context/projects/{pid}'
+    proposal = author.post(f'{base}/contexts', json={
+        'name': 'Retry contract', 'filename': 'retries.md', 'owner': 'Designer', 'owner_type': 'architect',
+        'content': '## Overview\n\nPayment retries.\n\n## Details\n\nAt most two attempts; preserve idempotency.\n\n## Next steps\n\nTest retry boundaries.',
+        'reason': 'Approved provider agreement.'}).json()
+    assert author.get('/api/workspace', params={'project_id': pid}).json()['contexts'] == []
+    response = reviewer.post(f"{base}/proposals/{proposal['id']}/review", json={'hash': proposal['hash'], 'decision': 'approve'})
+    assert response.status_code == 200, response.text
+    chat = author.post('/api/conversations', json={'title': 'Implement retries', 'request_id': 'team-shared-context', 'project_id': pid}).json()
+    result = author.post(f"/api/conversations/{chat['id']}/turns", json={'query': 'Implement payment retries', 'budget': 6000, 'request_id': 'team-first-message'}).json()
+    assert result['manifest']['sources'][0]['id'] == proposal['context_id']
+    assert 'two attempts' in result['output']
+    assert reviewer.get(f"/api/conversations/{chat['id']}").status_code == 404
+    assert reviewer.get('/api/workspace', params={'project_id': pid}).json()['tasks'] == []
+    events = author.get('/api/workspace', params={'project_id': pid}).json()['events']
+    publication = next(e for e in events if e['action'] == 'Context revision published')
+    assert publication['actor'] == 'architect-user' and 'developer-user' in publication['detail']
+    members['author-token']['contextos_workspace'] = 'other-team'
+    assert author.get(f'{base}/contexts').status_code == 404
+    assert author.get(f"/api/conversations/{chat['id']}").status_code == 404
+
+
 @pytest.mark.parametrize('field,value,message', [
     ('uid', 'developer-user', 'distinct user'),
     ('contextos_role', 'developer', 'Developer author and Architect reviewer'),

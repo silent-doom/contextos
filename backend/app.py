@@ -12,6 +12,8 @@ from backend import domain as d
 from backend.ai import AI
 from backend.store import make_store
 from backend.conversations import ConversationService
+from backend import project_context as pc
+from backend.api import service as pages
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -38,11 +40,13 @@ class ReviewInput(Input):
 class TaskInput(Input):
     query: str = Field(min_length=3, max_length=2000)
     budget: int = Field(default=6000, ge=200, le=16000)
+    project_id: str | None = Field(default=None, max_length=80)
 
 
 class ConversationInput(Input):
     title: str = Field(min_length=3, max_length=120)
     request_id: str = Field(pattern=r'^[a-zA-Z0-9_-]{8,80}$')
+    project_id: str | None = Field(default=None, max_length=80)
 
 
 class TurnInput(TaskInput):
@@ -58,6 +62,7 @@ class IngestInput(Input):
 class ActivityInput(Input):
     action: Literal['context_viewed', 'manifest_inspected']
     target_id: str = Field(min_length=1, max_length=80)
+    project_id: str | None = Field(default=None, max_length=80)
 
 
 class RoleInput(Input):
@@ -91,7 +96,8 @@ def create_app(store=None, ai=None):
                     s, actor, f'{operation.title()} {outcome}', None,
                     f'HTTP {exc.status}. The request did not complete.',
                     role=role, outcome=outcome, private_role=role,
-                    private_actor=actor if operation == 'conversations' else None))
+                    private_actor=actor if operation == 'conversations' else None,
+                    project_id=request.path_params.get('project_id') if request.path_params.get('project_id') in s.get('context_projects', {}) else None))
             except d.Problem:
                 import logging
                 logging.getLogger(__name__).warning('Audit append unavailable at workspace capacity.')
@@ -139,8 +145,8 @@ def create_app(store=None, ai=None):
         request.state.identity_info = (workspace, f'demo-{role}', role)
         return request.state.identity_info
 
-    def reserve(workspace, role, sources, kind):
-        return app.state.store.mutate(workspace, lambda state: d.reserve_usage(state, role, sources, kind))
+    def reserve(workspace, role, sources, kind, project_id=None):
+        return app.state.store.mutate(workspace, lambda state: d.reserve_usage(state, role, sources, kind, project_id=project_id))
 
     from backend.identity import register_auth_routes
     register_auth_routes(app, auth_mode)
@@ -166,12 +172,15 @@ def create_app(store=None, ai=None):
         return {'status': 'ok', 'ai_mode': app.state.ai.mode, 'auth_mode': auth_mode}
 
     @app.get('/api/workspace')
-    def workspace(request: Request, response: Response):
+    def workspace(request: Request, response: Response, project_id: str | None = None):
         wid, actor, role = identity(request, response)
         current = app.state.store.read(wid)
-        result = d.snapshot(current, role, actor)
+        selected = pc.view(current, project_id)
+        result = d.snapshot(selected, role, actor)
         result.update(actor=actor, ai_mode=app.state.ai.mode, auth_mode=auth_mode,
-                      next_actions=d.next_actions(current, role, actor), context_pages_enabled=True)
+                      next_actions=d.next_actions(selected, role, actor), context_pages_enabled=True,
+                      selected_project_id=project_id,
+                      projects=[pages.metadata(p) for p in pages.projects(current).values() if not p['archived'] or p['id'] == project_id])
         return result
 
     @app.post('/api/persona')
@@ -201,16 +210,16 @@ def create_app(store=None, ai=None):
     def assemble(data: TaskInput, request: Request, response: Response):
         wid, actor, role = identity(request, response)
         def assemble_context(s):
-            result = d.assemble(s, role, data.query, data.budget)
+            result = pc.assemble(s, role, data.query, data.budget, data.project_id)
             d.audit(s, actor, 'Context assembled', None, f"{len(result['sources'])} accepted sources selected.",
-                    role=role, source_ids=[x['id'] for x in result['sources']])
+                    role=role, source_ids=[x['id'] for x in result['sources']], project_id=data.project_id)
             return result
         return app.state.store.mutate(wid, assemble_context)
 
     @app.post('/api/conversations')
     def create_conversation(data: ConversationInput, request: Request, response: Response):
         wid, actor, role = identity(request, response)
-        return app.state.conversations.create(wid, actor, role, data.title, data.request_id)
+        return app.state.conversations.create(wid, actor, role, data.title, data.request_id, data.project_id)
 
     @app.get('/api/conversations')
     def list_conversations(request: Request, response: Response):
@@ -232,25 +241,25 @@ def create_app(store=None, ai=None):
     @app.post('/api/tasks')
     def task(data: TaskInput, request: Request, response: Response):
         wid, actor, role = identity(request, response)
-        manifest = d.assemble(app.state.store.read(wid), role, data.query, data.budget)
-        call_id = reserve(wid, role, [x['id'] for x in manifest['sources']], 'task')
+        manifest = pc.assemble(app.state.store.read(wid), role, data.query, data.budget, data.project_id)
+        call_id = reserve(wid, role, [x['id'] for x in manifest['sources']], 'task', data.project_id)
         usage = None
         try:
             output, usage = app.state.ai.task(role, data.query, manifest)
-            run = {'id': d.uid('RUN'), 'query': data.query, 'role': role, 'actor': actor, 'output': output, 'manifest': manifest, 'usage': usage, 'created_at': d.now(), 'stale': False}
+            run = {'id': d.uid('RUN'), 'project_id': data.project_id, 'query': data.query, 'role': role, 'actor': actor, 'output': output, 'manifest': manifest, 'usage': usage, 'created_at': d.now(), 'stale': False}
             def save(s):
-                run['stale'] = any(s['contexts'][x['id']]['revision'] != x['revision'] for x in manifest['sources'])
+                run['stale'] = pc.stale(s, run)
                 s['tasks'][run['id']] = deepcopy(run)
                 d.finish_usage(s, call_id, usage)
                 d.audit(s, actor, 'Task completed', None, f"Run {run['id']} · {len(manifest['sources'])} sources",
-                        role=role, source_ids=[x['id'] for x in manifest['sources']])
+                        role=role, source_ids=[x['id'] for x in manifest['sources']], project_id=data.project_id)
             app.state.store.mutate(wid, save)
             return run
         except Exception as exc:
             def failed(s):
                 d.finish_usage(s, call_id, usage or getattr(exc, 'usage', None), failed=True)
                 d.audit(s, actor, 'Model processing failed', None, 'Inspect usage and retry when available.',
-                        role=role, outcome='failed', private_role=role)
+                        role=role, outcome='failed', private_role=role, project_id=data.project_id)
             app.state.store.mutate(wid, failed)
             raise
 
@@ -279,11 +288,11 @@ def create_app(store=None, ai=None):
             raise
 
     @app.get('/api/export')
-    def export(request: Request, response: Response):
+    def export(request: Request, response: Response, project_id: str | None = None):
         wid, actor, role = identity(request, response)
         def export_visible(s):
-            d.audit(s, actor, 'Evidence exported', None, 'Exported the persona-visible workspace.', role=role, private_role=role)
-            result = d.snapshot(s, role, actor)
+            d.audit(s, actor, 'Evidence exported', None, 'Exported the persona-visible workspace.', role=role, private_role=role, project_id=project_id)
+            result = d.snapshot(pc.view(s, project_id), role, actor)
             for item in result['conversations']:
                 item['turns'] = [deepcopy(s['tasks'][tid]) for tid in item['turn_ids']]
             return result
@@ -294,8 +303,8 @@ def create_app(store=None, ai=None):
         wid, actor, role = identity(request, response)
         def record(s):
             if data.action == 'context_viewed':
-                item = d.context(s, data.target_id, role)
-                d.audit(s, actor, 'Context inspected', item['id'], f"{item['title']} · v{item['revision']}", role=role)
+                item = d.context(pc.view(s, data.project_id), data.target_id, role)
+                d.audit(s, actor, 'Context inspected', item['id'], f"{item['title']} · v{item['revision']}", role=role, project_id=data.project_id)
             else:
                 task = s['tasks'].get(data.target_id)
                 if (not task or not d.task_visible(s, task, role, actor)
@@ -306,7 +315,7 @@ def create_app(store=None, ai=None):
                         source_ids=[x['id'] for x in task['manifest']['sources']] + task['manifest'].get('history_source_ids', []),
                         private_role=role if task.get('conversation_id') else None,
                         private_actor=actor if task.get('conversation_id') else None,
-                        conversation_id=task.get('conversation_id'))
+                        conversation_id=task.get('conversation_id'), project_id=task.get('project_id'))
             return {'recorded': True}
         return app.state.store.mutate(wid, record)
 

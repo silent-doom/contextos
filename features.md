@@ -89,3 +89,9 @@ with Overview/Work/Inbox, secondary tools, legacy routes and protected refresh
 cleanup. The controller fixture loads real modules and models location/history.
 Six new integration checks plus the existing map/page suite bring local totals
 to 85 Python + 36 Node. CI includes that suite; hosted verification is pending.
+
+Project integration: approved Knowledge pages now supply Work, Inbox, Overview
+and exports, with project-scoped private conversations and source freshness.
+The additional demo initializer, examples, button and recording guide were
+removed. Project selection remains in Knowledge; mobile More is scoped and
+dismissible. Live demo preparation is owned by the user.

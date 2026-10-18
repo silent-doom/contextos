@@ -39,15 +39,15 @@ def context(state, cid, role):
     return item
 
 
-def audit(state, actor, action, cid, detail, *, role=None, outcome='completed', source_ids=None, private_role=None, private_actor=None, conversation_id=None):
+def audit(state, actor, action, cid, detail, *, role=None, outcome='completed', source_ids=None, private_role=None, private_actor=None, conversation_id=None, project_id=None):
     state['events'].append({'id': uid('EVT'), 'at': now(), 'actor': actor,
                             'role': role, 'action': action, 'context_id': cid,
                             'detail': detail, 'outcome': outcome,
                             'source_ids': list(source_ids or []), 'private_role': private_role,
-                            'private_actor': private_actor, 'conversation_id': conversation_id})
+                            'private_actor': private_actor, 'conversation_id': conversation_id, 'project_id': project_id})
 
 
-def reserve_usage(state, role, sources, kind, *, private_actor=None, conversation_id=None):
+def reserve_usage(state, role, sources, kind, *, private_actor=None, conversation_id=None, project_id=None):
     """Reserve every model attempt inside the caller's business transaction."""
     if len(state['usage']) >= 50:
         raise Problem('This workspace has reached its 50-call demo allowance. Export and start a new sandbox.', 429)
@@ -57,7 +57,7 @@ def reserve_usage(state, role, sources, kind, *, private_actor=None, conversatio
     call_id = uid('CALL')
     state['usage'].append({'id': call_id, 'at': now(), 'kind': kind, 'status': 'pending',
                            'source_ids': list(sources), 'private_role': role if kind in ('extraction', 'conversation') else None,
-                           'private_actor': private_actor, 'conversation_id': conversation_id})
+                           'private_actor': private_actor, 'conversation_id': conversation_id, 'project_id': project_id})
     return call_id
 
 
@@ -178,11 +178,19 @@ def source_payload(items):
 
 def assemble(state, role, query, budget):
     allowed = [x for x in state['contexts'].values() if visible(x, role) and x['status'] == 'accepted']
-    mandatory = [x for x in allowed if x['mandatory']]
+    required = {x['id'] for x in allowed if x['mandatory']}
+    while True:
+        expanded = required | {dep for x in allowed if x['id'] in required for dep in x['dependencies']}
+        if expanded == required:
+            break
+        required = expanded
+    if not required.issubset({x['id'] for x in allowed}):
+        raise Problem('A mandatory constraint has an unavailable dependency. Ask its owner to resolve access before continuing.', 422)
+    mandatory = [x for x in allowed if x['id'] in required]
     if estimate(source_payload(mandatory)) > budget:
         raise Problem('Mandatory constraints exceed this context budget. Increase the budget; no constraints were dropped.', 422)
     terms = set(re.findall(r'\w+', query.lower())) - {'the', 'a', 'to', 'and', 'for', 'of', 'with', 'what', 'how'}
-    scored = [(len(terms & set(re.findall(r'\w+', (x['title'] + ' ' + x['body']).lower()))), x) for x in allowed if not x['mandatory']]
+    scored = [(len(terms & set(re.findall(r'\w+', (x['title'] + ' ' + x['body']).lower()))), x) for x in allowed if x['id'] not in required]
     scored.sort(key=lambda pair: (-pair[0], pair[1]['id']))
     selected = list(mandatory)
     for score, item in scored:
@@ -208,6 +216,11 @@ def task_visible(state, task, role, actor=None):
     if task.get('conversation_id') and (task['actor'] != actor or task['role'] != role):
         return False
     sources = {s['id'] for s in task['manifest']['sources']} | set(task['manifest'].get('history_source_ids', []))
+    if task.get('project_id'):
+        # Project pages share workspace visibility. All source IDs, including
+        # working-history sources, must still exist in this exact project.
+        project = state.get('context_projects', {}).get(task['project_id'])
+        return bool(project and all(cid in project['contexts'] and not project['contexts'][cid]['deleted'] for cid in sources))
     return all(cid in state['contexts'] and visible(state['contexts'][cid], role) for cid in sources)
 
 
@@ -219,7 +232,8 @@ def conversation_visible(state, conversation, role, actor):
 
 def snapshot(state, role, actor=None):
     allowed = {k: deepcopy(v) for k, v in state['contexts'].items() if visible(v, role)}
-    proposals = [deepcopy(p) for p in state['proposals'].values() if not p['context_id'] or p['context_id'] in allowed]
+    proposals = [deepcopy(p) for p in state['proposals'].values()
+                 if not p['context_id'] or p['context_id'] in allowed or p.get('project_id') == state['project']['id']]
     for p in proposals:
         item = allowed.get(p['context_id'])
         p['before'] = next((h['body'] for h in item['history'] if h['revision'] == p['base_revision']), '') if item else ''

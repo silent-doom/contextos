@@ -2,6 +2,33 @@
 
 Append an entry in every implementation commit: change, reason, verification, limitations. Git is the exact file-level history; this is the human-readable decision log. Dates use Asia/Kolkata.
 
+## 2026-10-18 — Connect existing project work
+
+Approved Knowledge pages now supply the same project-scoped sources to Work,
+Inbox, Overview and exports. Publication records attribution and flags affected
+work atomically; conversations retain exact per-turn inputs and explicit refresh.
+Removed the added handoff initializer, sample project, promotional button and
+recording guide at the user's request. Project selection stays in Knowledge;
+there is no additional header selector. The mobile More menu now has scoped
+layout and closes on selection, outside click and Escape. Existing project data
+is preserved. Live demo preparation is owned by the user.
+
+The two generated local sample projects were archived, with history retained and
+a recovery backup in ignored local data. Validation: 106 Python tests pass, one
+optional MCP transport test skips, and 52 JavaScript contracts pass. No connected
+browser was available for visual verification.
+
+Overview spacing refinement: added 16px padding above and below the Start a task
+and Browse knowledge button row. The latest supplied reference keeps the project
+heading and uses a white summary card, royal-blue left border, serif status text
+and vertically centered actions on the right. Narrow screens stack the actions;
+critical states retain a distinct warning accent. CSS-only change; diff whitespace
+check passes.
+
+Work spacing refinement: inset the role-picker chevron by 12px with more label
+padding, and added space above and below the source-card list so the inspection
+button no longer touches the last card. CSS-only; diff whitespace check passes.
+
 ## 2026-10-14 — F01: project foundation
 
 - Read both supplied source documents and existing ignore configuration. No application code or commits existed. The blueprint references SHARED_AGENT_CONTEXT_PLATFORM.md, which is not present.

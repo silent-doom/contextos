@@ -118,3 +118,37 @@ generation and clears the page module, whose own generation cancels pending
 loads. Integration fixtures load both real modules and supply location/history;
 CI runs these contracts alongside the context-page/map suite. This repairs the
 merge boundary without changing backend authority or context storage.
+
+## Decision ADR-008: one canonical context source per project
+
+`backend/project_context.py` adapts approved project/page records into the
+existing retrieval and workspace read models. It never writes duplicate content
+to the older context collection. Requests select a project explicitly; each run,
+conversation, manifest, usage entry and audit event retains that scope. A browser
+selection belongs to its session, not to a globally mutable workspace setting.
+Old workspaces remain a separate compatible scope. Workspace membership is the
+current project access boundary; page-specific grants are not added here.
+
+HTTP and MCP proposals pass through the same application boundary. Publication
+updates the canonical revision, marks affected project runs and records the
+attributed audit event in one store transaction. New or changed requirements and
+security guardrails conservatively flag all earlier project work, including runs
+that never loaded a newly introduced rule. These roles supply deterministic
+mandatory context; prerequisite dependencies must also fit the source budget.
+The manifest records mandatory revisions so a new constraint published during
+inference also makes the completed result stale. Changed dependency versions
+produce warnings supplied to both the model and UI. No automatic correctness or
+complete impact analysis is claimed.
+
+`web/conversations.js` owns conversation selection, request keys, uncertain
+creation/reply recovery and bounded pending polling. The workspace controller
+renders saved messages and immutable per-turn sources. Explicit refresh starts a
+new working segment; old turns remain visible. Project/persona changes and
+sign-out clear the controller, timers and private buffers; generation checks
+discard late responses. Existing standalone task clients remain compatible.
+
+Project selection comes from the existing Knowledge picker and persists in the
+browser session. Initial load selects the first available project, and removed
+projects fall back to permitted projects. No extra project selector or synthetic
+setup flow is added. The mobile More menu has its own layout instead of inheriting
+sidebar navigation styles, with selection/outside-click/Escape dismissal.

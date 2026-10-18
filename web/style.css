@@ -355,6 +355,14 @@ select{
   border-radius:3px;
   background:var(--paper);
 }
+#persona{
+  appearance:none;
+  padding:8px 36px 8px 12px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='m2 4 4 4 4-4' fill='none' stroke='%2319243b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  background-size:12px 12px;
+}
 main{
   max-width:1440px;
   margin:auto;
@@ -966,6 +974,9 @@ main{
   display:flex;
   flex-direction:column;
   gap:8px;
+}
+.task-sources .source-list{
+  margin-block:12px 16px;
 }
 .source-item{
   background:var(--soft);
@@ -2175,3 +2186,27 @@ details .cp-side-actions {margin-top:14px;}
   .cp-fields,.cp-relationships {grid-template-columns:1fr;}
   .cp-empty-map {min-height:420px;}
 }
+/* Resumable work uses the existing workspace palette. */
+.refresh-context{display:flex;align-items:flex-start;gap:10px;font-size:13px;line-height:1.6;margin:14px 0}
+.refresh-context input{width:auto;margin-top:5px;accent-color:var(--green)}
+.conversation-history{margin-top:24px}
+.conversation-goal{font-size:18px;line-height:1.5;margin:26px 0 12px;overflow-wrap:anywhere}
+.conversation-history .result{margin-top:0}
+/* Project summary matches the Overview reference. */
+.overview-status{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:28px;padding:24px;border:1px solid var(--line);border-left:4px solid var(--green);border-radius:4px;background:var(--paper);margin-bottom:24px}
+.overview-status h2{font-size:22px;font-weight:600;line-height:1.4;margin:12px 0}
+.overview-status p{font-size:12px;line-height:1.6;color:var(--muted)}
+.overview-status>.button-group{align-items:center;flex-wrap:wrap;padding-block:16px}
+.overview-status.is-critical{border-left-color:#a52e49}
+.overview-status .tag.critical{background:#fff0f3;border-color:#edc6d0;color:#a52e49}
+@media(max-width:880px){.overview-status{grid-template-columns:1fr;gap:12px}.overview-status>.button-group{justify-self:start;padding-block:8px}}
+@media(max-width:600px){.overview-status{padding:20px}.overview-status h2{font-size:20px}}
+.workspace-tools{display:none;position:relative}
+.workspace-tools>summary{cursor:pointer;list-style:none;padding:7px 10px;border:1px solid var(--line);border-radius:3px;background:var(--paper);font-size:12px}
+.workspace-tools>summary::-webkit-details-marker{display:none}
+#mobile-tools{position:absolute;top:calc(100% + 8px);right:0;z-index:10;display:none;gap:3px;width:210px;height:auto;margin:0;padding:6px;border:1px solid var(--line);border-radius:4px;background:var(--paper);box-shadow:0 6px 18px #19243b1a}
+.workspace-tools[open]>#mobile-tools{display:grid}
+#mobile-tools .nav-item{width:100%;flex-direction:row;justify-content:flex-start;padding:10px;color:var(--ink);font-size:12px}
+#mobile-tools .nav-text{display:block;font-size:12px}
+#mobile-tools .nav-item:hover,#mobile-tools .nav-item.active{background:var(--soft);color:var(--green)}
+@media(max-width:600px){.workspace-tools{display:block}.sidebar .secondary-nav{display:none}#nav .nav-item{width:25%}.conversation-goal{font-size:16px}}

@@ -8,6 +8,20 @@ const source = fs.readFileSync(path.resolve(__dirname,'../../../web/context-page
 const response = data => ({ok:true,status:200,json:async()=>data});
 const element = () => ({isConnected:true,innerHTML:'',textContent:'',addEventListener(){},querySelector(){return null;}});
 
+test('Knowledge does not automatically reopen an archived project when none are active',async()=>{
+  const calls=[];
+  const sandbox={window:{contextMap},fetch:async url=>{
+    calls.push(url);
+    return response(url.endsWith('/template')?{}:[{id:'retired',name:'Retired project',archived:true}]);
+  }};
+  vm.runInNewContext(source,sandbox);
+  const root=element();await sandbox.window.contextPages.mount(root);
+  assert.equal(calls.length,2);
+  assert.match(root.innerHTML,/Select a project/);
+  assert.match(root.innerHTML,/Create project/);
+  assert.doesNotMatch(root.innerHTML,/cp-reader-body/);
+});
+
 test('late context response cannot populate a different persona or sign-in view', async () => {
   let release, count=0;
   const sandbox={window:{contextMap},fetch:async()=>{

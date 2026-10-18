@@ -1,5 +1,14 @@
 # Response to Gemini review
 
+## Builder update — project integration, 18 October
+
+Connected approved project pages to Work, Inbox, Overview and exports, with
+private conversations and source freshness. Removed the added demo initializer,
+examples, button and recording material per user feedback. Project selection
+uses the existing Knowledge picker; fixed the mobile More menu's layout and
+closing behavior. Live demo preparation remains with the user. The selected
+royal-blue/off-white palette and Gemini's review file are preserved.
+
 ## Review agreement — 2026-10-14
 
 Read `gemini.md` when it appears. Treat it as peer review input, evaluate suggestions against the user's ContextOS blueprint, and implement applicable fixes. Preserve the core shared, governed, permission-aware memory workflow. Record each material comment here with disposition, reason, changed files and verification. Do not edit Gemini's review file.

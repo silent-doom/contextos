@@ -46,6 +46,7 @@ jobs:
           node --check web/auth.js
           node --check web/context-map.js
           node --check web/context-pages.js
+          node --check web/conversations.js
           node --test tests/browser_*.test.cjs backend/api/tests/context_pages.test.cjs
       - name: Rehearse the governed workflow
         run: python scripts/rehearsal.py

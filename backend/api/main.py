@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from backend.api import models, service as s
 from backend.api.markdown import HEADINGS, TEMPLATE, sections
 from backend.domain import Problem
+from backend import project_context
 
 
 def create_router(workspace_endpoint):
@@ -63,7 +64,7 @@ def create_router(workspace_endpoint):
 
     @router.post('/projects/{project_id}/contexts', status_code=201)
     def create_context(project_id: str, body: models.NewContext, request: Request):
-        return mutate(request, lambda state, actor, role: s.propose(s.project(state, project_id), actor, 'create', body.model_dump()))
+        return mutate(request, lambda state, actor, role: project_context.propose(state, project_id, actor, role, 'create', body.model_dump()))
 
     @router.get('/projects/{project_id}/contexts/{context_id}')
     def context(project_id: str, context_id: str, request: Request, max_chars: int = Query(default=12000, ge=1, le=12000)):
@@ -72,11 +73,11 @@ def create_router(workspace_endpoint):
 
     @router.put('/projects/{project_id}/contexts/{context_id}')
     def update_context(project_id: str, context_id: str, body: models.Update, request: Request):
-        return mutate(request, lambda state, actor, role: s.propose(s.project(state, project_id), actor, 'update', body.model_dump(), context_id))
+        return mutate(request, lambda state, actor, role: project_context.propose(state, project_id, actor, role, 'update', body.model_dump(), context_id))
 
     @router.delete('/projects/{project_id}/contexts/{context_id}')
     def delete_context(project_id: str, context_id: str, body: models.Delete, request: Request):
-        return mutate(request, lambda state, actor, role: s.propose(s.project(state, project_id), actor, 'delete', body.model_dump(), context_id))
+        return mutate(request, lambda state, actor, role: project_context.propose(state, project_id, actor, role, 'delete', body.model_dump(), context_id))
 
     @router.get('/projects/{project_id}/contexts/{context_id}/markdown')
     def markdown(project_id: str, context_id: str, request: Request):
@@ -153,7 +154,7 @@ def create_router(workspace_endpoint):
 
     @router.post('/projects/{project_id}/proposals/{proposal_id}/review')
     def review(project_id: str, proposal_id: str, body: models.Review, request: Request):
-        return mutate(request, lambda state, actor, role: s.review(s.project(state, project_id), actor, role, proposal_id, body.model_dump()))
+        return mutate(request, lambda state, actor, role: project_context.review(state, project_id, actor, role, proposal_id, body.model_dump()))
 
     @router.get('/projects/{project_id}/activity')
     def activity(project_id: str, request: Request, limit: int = Query(default=30, ge=1, le=100)):

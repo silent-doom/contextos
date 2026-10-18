@@ -11,8 +11,6 @@ import time
 import pytest
 import uvicorn
 from fastapi.testclient import TestClient
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
 from backend import domain as d
 from backend.app import create_app
 from backend.ai import AI
@@ -319,6 +317,9 @@ def test_workspace_isolation_and_firebase_trusted_identity(monkeypatch):
 
 
 def test_real_mcp_stdio_creates_empty_project_and_proposes_context(client):
+    pytest.importorskip('mcp', reason='Optional MCP transport: install backend/mcp/requirements.txt to verify stdio.')
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
     with socket.socket() as port_socket:
         port_socket.bind(('127.0.0.1', 0))
         port = port_socket.getsockname()[1]

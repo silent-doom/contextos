@@ -21,6 +21,7 @@ function workspace(fixture, {url='http://testserver/', contextResponses={}}={}) 
     return elements.get(selector);
   }
   const context = vm.createContext({
+    crypto:require('node:crypto').webcrypto,
     document:{querySelector:element,addEventListener:(name,fn)=>handlers.document[name]=fn,
       body:element('body'),getElementById:id=>element(`#${id}`)},
     window:{addEventListener:(name,fn)=>handlers.window[name]=fn,scrollTo(){},
@@ -38,6 +39,7 @@ function workspace(fixture, {url='http://testserver/', contextResponses={}}={}) 
   // Load the shipped modules in the same order as index.html, including cleanup.
   vm.runInContext(fs.readFileSync('web/context-map.js','utf8'),context);
   vm.runInContext(fs.readFileSync('web/context-pages.js','utf8'),context);
+  vm.runInContext(fs.readFileSync('web/conversations.js','utf8'),context);
   vm.runInContext(source,context);
   return {element,handlers,storage,calls,context,
     run:code=>vm.runInContext(code,context),
@@ -332,4 +334,96 @@ for (const route of ['inbox','overview']) test(`a late ${route} response cannot 
   assert.equal(page.run('state'),undefined);
   assert.equal(page.element('#main').innerHTML,'');
   assert.equal(page.element('#nav').innerHTML,'');
+});
+
+test('project selection scopes Work, Inbox review and exports to the same accepted pages',async()=>{
+  const fixture=state();
+  const project={...state(),selected_project_id:'PRJ-1',project:{id:'PRJ-1',name:'Shared checkout'},projects:[{id:'PRJ-1',name:'Shared checkout'}]};
+  project.proposals=[{id:'PROP-1',context_id:'CTX-1',project_id:'PRJ-1',title:'Retry limit',domain:'Architecture',review_role:'architect',author:'developer',status:'pending',hash:'abc',body:'Two attempts'}];
+  const page=workspace(fixture,{contextResponses:{'/api/workspace?project_id=PRJ-1':project}});
+  page.render('work');await page.run('selectProject("PRJ-1")');
+  assert.equal(page.storage.get('context-project'),'PRJ-1');
+  assert.equal(page.element('#project-name').textContent,'Shared checkout');
+  assert.equal(page.run('selectedProject'),'PRJ-1');
+  await page.run('action({dataset:{action:"approve",id:"PROP-1"}})');
+  const review=page.calls.find(c=>c.url==='/api/context/projects/PRJ-1/proposals/PROP-1/review');
+  assert.equal(JSON.parse(review.options.body).decision,'approve');
+  page.run('clearProtectedView()');
+  assert.equal(page.storage.has('context-project'),false);
+});
+
+test('new required constraints are critical even when the earlier run never loaded them',()=>{
+  const fixture=state();
+  const prior=run('RUN-1',fixture.actor,'Prior work');
+  prior.context_changes=[{context_id:'SEC-2',title:'New logging rule',revision:1,mandatory:true,reason:'Provider policy changed'}];
+  fixture.tasks=[prior];const page=workspace(fixture);page.render('overview');
+  assert.match(page.element('#main').innerHTML,/1 critical item/);
+  assert.match(page.element('#main').innerHTML,/New logging rule v1/);
+  page.render('work','RUN-1');
+  assert.match(page.element('#main').innerHTML,/Provider policy changed/);
+});
+
+test('Work reopens private conversations and inspects the selected turn original sources',async()=>{
+  const fixture=state(),first=run('RUN-1',fixture.actor,'Implement retries');
+  first.stale=false;first.status='succeeded';first.conversation_id='CHAT-1';
+  first.manifest.sources=[{id:'CTX-1',revision:1,title:'Retry design',body:'Three attempts'}];
+  fixture.tasks=[first];fixture.conversations=[{id:'CHAT-1',title:'Payment retries',turn_ids:['RUN-1'],updated_at:first.created_at}];
+  const chat={...fixture.conversations[0],turns:[first]};
+  const page=workspace(fixture,{contextResponses:{'/api/conversations/CHAT-1':chat}});
+  page.render('work');await page.run('action({dataset:{action:"open-conversation",id:"CHAT-1"}})');
+  assert.match(page.element('#main').innerHTML,/Private task conversation/);
+  assert.match(page.element('#main').innerHTML,/Follow-up/);
+  assert.match(page.element('#main').innerHTML,/CTX-1 · v1/);
+  page.run('clearProtectedView()');
+  assert.equal(page.run('chats.current'),null);
+});
+
+test('initial load uses the existing Knowledge project for every workspace view',async()=>{
+  const initial={...state(),projects:[{id:'PRJ-1',name:'Team project'}]};
+  const selected={...state(),project:{id:'PRJ-1',name:'Team project'},projects:initial.projects,
+    selected_project_id:'PRJ-1',contexts:[]};
+  const page=workspace(initial,{contextResponses:{'/api/workspace?project_id=PRJ-1':selected}});
+  await page.run('refresh()');
+  assert.equal(page.run('selectedProject'),'PRJ-1');
+  assert.equal(page.run('state.project.id'),'PRJ-1');
+  assert.equal(page.element('#project-name').textContent,'Team project');
+  assert.match(page.element('#main').innerHTML,/Team project/);
+  assert.equal(page.calls.filter(c=>c.url==='/api/workspace?project_id=PRJ-1').length,1);
+});
+
+test('an unavailable saved project falls back to permitted project knowledge',async()=>{
+  const initial={...state(),projects:[{id:'PRJ-2',name:'Available project'}]};
+  const available={...state(),project:{id:'PRJ-2',name:'Available project'},projects:initial.projects};
+  const page=workspace(initial);page.render('overview');
+  page.run('selectedProject="removed-project"');
+  page.context.fetch=async url=>({ok:!url.includes('removed-project'),status:url.includes('removed-project')?404:200,
+    json:async()=>url.includes('removed-project')?{detail:'Project unavailable'}:url.includes('PRJ-2')?available:initial});
+  await page.run('refresh()');
+  assert.equal(page.run('selectedProject'),'PRJ-2');
+  assert.equal(page.element('#project-name').textContent,'Available project');
+});
+
+test('a retired selected project does not reopen sample content on Overview',async()=>{
+  const initial={...state(),projects:[{id:'PRJ-2',name:'Active project'}]};
+  const retired={...state(),project:{id:'PRJ-old',name:'Retired project',archived:true},projects:initial.projects};
+  const active={...state(),project:{id:'PRJ-2',name:'Active project'},projects:initial.projects};
+  const page=workspace(initial,{contextResponses:{'/api/workspace?project_id=PRJ-old':retired,'/api/workspace?project_id=PRJ-2':active}});
+  page.render('overview');page.run('selectedProject="PRJ-old"');await page.run('refresh()');
+  assert.equal(page.run('selectedProject'),'PRJ-2');
+  assert.match(page.element('#main').innerHTML,/Active project/);
+  assert.doesNotMatch(page.element('#main').innerHTML,/Retired project/);
+});
+
+test('More closes when its current link is selected, on outside click and on Escape',async()=>{
+  const page=workspace(state());page.render('insights');
+  const menu=page.element('#workspace-tools');
+  menu.open=true;
+  await page.handlers.document.click({target:{closest:selector=>['#workspace-tools','#mobile-tools a'].includes(selector)?{}:null}});
+  assert.equal(menu.open,false);
+  menu.open=true;
+  await page.handlers.document.click({target:{closest:()=>null}});
+  assert.equal(menu.open,false);
+  let focused=false;page.element('#workspace-tools summary').focus=()=>focused=true;
+  menu.open=true;page.handlers.document.keydown({key:'Escape'});
+  assert.equal(menu.open,false);assert.equal(focused,true);
 });

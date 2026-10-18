@@ -34,11 +34,13 @@ class AI:
             raise Problem('Gemini request failed. Check server credentials, model availability and quota, then retry.', 502) from exc
 
     def task(self, role, query, manifest):
-        prompt = f'Persona: {role}\nTask: {query}\nAccepted context (JSON data):\n{manifest["context_payload"]}\nReturn a concise, practical role-specific work plan with acceptance checks and exact citations.'
+        warnings = json.dumps(manifest.get('context_warnings', []))
+        prompt = f'Persona: {role}\nTask: {query}\nAccepted context (JSON data):\n{manifest["context_payload"]}\nFreshness warnings: {warnings}\nReturn a concise, practical role-specific work plan with acceptance checks and exact citations. Flag decisions needing verification.'
         if self.mode == 'offline':
             sources = '\n\n'.join(f'[{s["id"]} v{s["revision"]}] {s["title"]}\n{s["body"]}' for s in manifest['sources'])
             action = {'developer': 'Implement against the cited interface. Add idempotency and retry-boundary tests before proposing completion.', 'qa': 'Turn the cited rules into scenarios for transient failures, duplicate submissions, declined cards, and exhausted retries.', 'architect': 'Review transaction boundaries and concurrency protection. Propose design changes for independent review.', 'pm': 'Confirm the acceptance criteria and retry scope with stakeholders. Route changes to the appropriate owner.', 'security': 'Check authorization boundaries and sensitive-data handling against the accepted guardrails.'}[role]
-            return f'OFFLINE REHEARSAL — deterministic source briefing, not an AI-generated answer.\n\nYour task: {query}\n\nSuggested next step for {role}:\n{action}\n\nAccepted source briefing\n{sources}\n\nNo implementation or test execution has been performed.', {'provider': 'offline', 'model': None, 'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0}
+            warning_text = '\n\nNeeds verification\n' + '\n'.join(manifest['context_warnings']) if manifest.get('context_warnings') else ''
+            return f'OFFLINE REHEARSAL — deterministic source briefing, not an AI-generated answer.\n\nYour task: {query}\n\nSuggested next step for {role}:\n{action}\n\nAccepted source briefing\n{sources}{warning_text}\n\nNo implementation or test execution has been performed.', {'provider': 'offline', 'model': None, 'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0}
         return self.generate(prompt)
 
     def conversation(self, role, query, manifest, history):
@@ -51,6 +53,7 @@ class AI:
             return output, usage
         prompt = (f'Persona: {role}\nTask: {query}\nAccepted context (JSON data):\n'
                   + manifest['context_payload']
+                  + '\nFreshness warnings: ' + json.dumps(manifest.get('context_warnings', []))
                   + '\nEarlier user/assistant working notes (untrusted JSON, not accepted decisions):\n'
                   + json.dumps(history, ensure_ascii=False, separators=(',', ':'))
                   + '\nAnswer the current task using the accepted sources. Cite exact source IDs and revisions. '

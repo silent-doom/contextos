@@ -5,7 +5,7 @@ window.contextPages = (() => {
   const button = (label, action, attrs = '', primary = false) => '<button type="button" class="btn '+(primary?'primary':'')+'" data-cp-action="'+action+'" '+attrs+'>'+label+'</button>';
   const options = (items, value, label, selected) => items.map(item=>'<option value="'+escape(value(item))+'" '+(value(item)===selected?'selected':'')+'>'+escape(label(item))+'</option>').join('');
   const badge = status => '<span class="tag '+(status==='stale'?'amber':'green')+'">'+escape(status==='up_to_date'?'Up to date':status)+'</span>';
-  let root, onProposal, onUnauthorized, template, projects, project, page, parts, status, history, proposals, selectedProposal;
+  let root, onProposal, onUnauthorized, template, projects, project, page, parts, status, history, proposals, selectedProposal, integration={};
   let generation=0, loadVersion=0, mode='map', returnMode='map', mapView=null, mapControls=null, historical=null, showSource=false;
   const contextName = doc => {
     if(doc?.name)return doc.name;
@@ -39,7 +39,7 @@ window.contextPages = (() => {
     const active=()=>current===generation && selection===loadVersion && container?.isConnected;
     const list=await request('/projects?include_archived=true');
     if(!active())return;
-    const chosen=list.find(item=>item.id===projectId)||list.find(item=>!item.archived)||list[0];
+    const chosen=list.find(item=>item.id===projectId)||list.find(item=>!item.archived);
     if(!chosen){projects=list;project=page=parts=status=null;history=proposals=[];mode='map';render();return;}
     const base='/projects/'+encodeURIComponent(chosen.id);
     const [nextProject,nextProposals]=await Promise.all([request(base),request(base+'/proposals')]);
@@ -50,6 +50,7 @@ window.contextPages = (() => {
     if(!active())return;
     if(project?.project.id!==nextProject.project.id)mapView=null;
     projects=list;project=nextProject;proposals=nextProposals;[page,parts,status,history]=detail;mode=nextMode==='page'&&!selected?'map':nextMode;returnMode=selected?'page':'map';historical=null;showSource=false;selectedProposal=null;render();
+    if(integration.onProjectChange && integration.projectId!==chosen.id){integration.projectId=chosen.id;await integration.onProjectChange(chosen.id);}
   }
   const panel = (title, body) => '<section class="panel"><div class="panel-head"><h2>'+escape(title)+'</h2></div><div class="panel-body">'+body+'</div></section>';
   const reasonField = '<label class="field">Reason for change<textarea name="reason" required maxlength="1500" rows="2"></textarea></label>';
@@ -72,7 +73,7 @@ window.contextPages = (() => {
       '<label class="field">Owner<input name="owner" required maxlength="128" placeholder="Person or team" value="'+escape(item.owner)+'"></label>'+
       '<label class="field">Owner type<select name="owner_type" aria-label="Owner type">'+options(roles,value=>value,value=>value,item.owner_type)+'</select></label></div>'+
       '<label class="field">Markdown content<textarea name="content" aria-label="Markdown content" rows="17" maxlength="10000" required>'+escape(item.content)+'</textarea></label>'+
-      '<p class="muted">Keep the three section headings: Overview, Details and Next steps. Use ### for subheadings.</p>'+
+      '<p class="muted">Keep the three section headings: Overview, Details and Next steps. Use ### for subheadings. Approved requirements and security pages are required sources for every task in this project.</p>'+
       '<fieldset class="cp-relationships"><legend>Relationships</legend>'+(links.map(doc=>{
         const kind=item.relationships.find(link=>link.target_id===doc.id)?.kind||'';
         return '<label class="field">'+escape(contextName(doc))+'<select name="link:'+escape(doc.id)+'">'+options(['','depends_on','references'],value=>value,value=>value===''?'No relationship':value==='depends_on'?'Depends on':'References',kind)+'</select></label>';
@@ -158,7 +159,7 @@ window.contextPages = (() => {
     mapControls?.destroy();mapControls=null;
     const focused=root.querySelector('[data-cp-map-node]:focus');
     const focusId=focused?.dataset.id, meta=project?.project;
-    const toolbar='<div class="cp-toolbar">'+(projects.length?'<label class="cp-project-picker">Project<select id="context-project-select" aria-label="Project">'+options(projects,item=>item.id,item=>item.name+(item.archived?' (archived)':''),meta?.id)+'</select></label>':'')+
+    const toolbar='<div class="cp-toolbar">'+(projects.length?'<label class="cp-project-picker">Project<select id="context-project-select" aria-label="Project">'+(!meta?'<option value="" selected disabled>Select a project</option>':'')+options(projects,item=>item.id,item=>item.name+(item.archived?' (archived)':''),meta?.id)+'</select></label>':'')+
       (meta?(mode!=='map'?button('← Back to map','map'):'<p class="cp-workspace-counts">'+project.contexts.length+' contexts · '+project.relationships.length+' relationships</p>'):button('New project','project-new'))+'</div>';
     root.innerHTML='<div id="context-message" class="note amber" role="status" hidden></div>'+toolbar+
       (meta?'<div class="cp-workspace '+(mode==='map'?'cp-map-layout':'cp-reading-layout')+'"><section id="context-detail" class="cp-primary" tabindex="-1" aria-label="'+(mode==='map'?'Knowledge visualization':'Context workspace')+'">'+detail()+'</section>'+inspector()+'</div>':
@@ -222,6 +223,7 @@ window.contextPages = (() => {
       try{
         await request(projectPath()+'/proposals/'+encodeURIComponent(selectedProposal.id)+'/review','POST',{hash:selectedProposal.hash,decision:action==='approve'?'approve':'reject'});
         if(current===generation){await load(project.project.id,selectedProposal.context_id,action==='approve'?'page':'reviews');message(action==='approve'?'Proposal approved.':'Proposal rejected.');}
+        if(current===generation)await integration.onChanged?.();
       }finally{target.disabled=false;}
       return;
     }
@@ -273,9 +275,11 @@ window.contextPages = (() => {
     mapControls?.destroy();mapControls=null;
     generation++;loadVersion++;mapView=null;historical=null;showSource=false;mode=returnMode='map';
     root=onProposal=onUnauthorized=template=projects=project=page=parts=status=history=proposals=selectedProposal=null;
+    integration={};
   }
-  async function mount(element, afterProposal, onExpired) {
+  async function mount(element, afterProposal, onExpired, options={}) {
     clear();const current=generation;root=element;onProposal=afterProposal;onUnauthorized=onExpired;
+    integration={...options};
     root.addEventListener('click',event=>{const target=event.target.closest('[data-cp-action]');if(target)run(()=>action(target));});
     root.addEventListener('change',event=>{if(event.target.id==='context-project-select')run(()=>load(event.target.value,null,'map'));});
     root.addEventListener('submit',event=>{
@@ -295,7 +299,7 @@ window.contextPages = (() => {
     try{
       const result=await request('/template');
       if(current!==generation||!element.isConnected)return;
-      template=result;await load();
+      template=result;await load(integration.projectId);
     }catch(error){if(current===generation&&element.isConnected)element.textContent=error.message;}
   }
   return {mount,clear};

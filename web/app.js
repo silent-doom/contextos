@@ -34,10 +34,25 @@ let busy = false;
 let demoPositions = {}, demoCompleted = {};
 let demoCatalog = [], demoRole = 'all', demoCategory = 'All cases', demoSelected = 'handoff', demoReports = {}, demoRunning = null;
 let identityConfig, protectedVersion = 0;
+let selectedProject = sessionStorage.getItem('context-project') || '';
+const projectQuery = () => selectedProject ? '?project_id=' + encodeURIComponent(selectedProject) : '';
+const chats = window.taskConversations.create({request:api,onError:error=>toast(error.message,true),onUpdate:chat => {
+  if(!state)return;
+  if(!chat){activeRun=undefined;if(currentView==='work')render();return;}
+  const succeeded = chat.turns.filter(t=>t.status === 'succeeded');
+  for(const turn of succeeded) {
+    const index = state.tasks.findIndex(t=>t.id === turn.id);
+    if(index < 0)state.tasks.push(turn);else state.tasks[index] = turn;
+  }
+  activeRun = succeeded.at(-1);
+  if(currentView === 'work')render();
+}});
 
-async function api(path, body) {
-  const response = await fetch(`/api/${path}`, {method:body === undefined ? 'GET' : 'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-ContextOS-Client':'workspace'}, ...(body === undefined ? {} : {body:JSON.stringify(body)})});
+async function api(path, body, method = body === undefined ? 'GET' : 'POST') {
+  const version = protectedVersion;
+  const response = await fetch(`/api/${path}`, {method, credentials:'same-origin', headers:{'Content-Type':'application/json','X-ContextOS-Client':'workspace'}, ...(body === undefined ? {} : {body:JSON.stringify(body)})});
   const data = await response.json();
+  if(version !== protectedVersion)throw new Error('The workspace changed. The earlier response was discarded.');
   if (!response.ok) {
     const detail = Array.isArray(data.detail) ? data.detail.map(x => `${x.loc.at(-1)}: ${x.msg}`).join('; ') : data.detail;
     const error = new Error(detail || 'The request could not be completed.');
@@ -51,11 +66,27 @@ function toast(message, error = false) {
   clearTimeout(toastTimer); const el = $('#toast'); el.textContent = message;
   el.className = `visible${error ? ' error' : ''}`; toastTimer = setTimeout(() => el.className = '', 6500);
 }
-async function refresh() {
+async function refresh(renderPage = true) {
   const version = protectedVersion;
-  const next = await api('workspace');
+  let next;
+  try {next = await api('workspace' + projectQuery());}
+  catch(error) {
+    if(error.status !== 404 || !selectedProject || version !== protectedVersion)throw error;
+    selectedProject = '';sessionStorage.removeItem('context-project');chats.clear();activeRun=selectedContext=undefined;
+    next = await api('workspace');
+  }
   if (version !== protectedVersion) return;
+  if(next.project?.archived && currentView !== 'knowledge') {
+    selectedProject='';sessionStorage.removeItem('context-project');chats.clear();activeRun=selectedContext=undefined;
+    next = await api('workspace');
+    if(version !== protectedVersion)return;
+  }
+  if(!selectedProject && next.projects?.length) {
+    await selectProject(next.projects[0].id);
+    return;
+  }
   state = next;
+  if(chats.current && !state.conversations?.some(c=>c.id===chats.current.id))chats.clear();
   if (state.auth_mode === 'demo' && !demoCatalog.length) demoCatalog = (await api('demo/scenarios')).scenarios;
   if (version !== protectedVersion) return;
   document.body.classList.remove('signed-out');
@@ -69,7 +100,22 @@ async function refresh() {
   $('#mode').textContent = state.ai_mode === 'offline' ? '● Offline rehearsal' : '● Gemini configured';
   $('#footer-mode').textContent = state.auth_mode === 'demo' ? 'Synthetic data · Isolated demo sandbox' : 'Authenticated workspace';
   if (activeRun) activeRun = state.tasks.find(t => t.id === activeRun.id);
-  render();
+  if (renderPage) render();
+}
+async function selectProject(id) {
+  if (id === selectedProject) return;
+  protectedVersion++;
+  selectedProject = id || '';
+  chats.clear();
+  sessionStorage.setItem('context-project',selectedProject);
+  activeRun = selectedContext = undefined;
+  state = undefined;
+  window.contextPages.clear();
+  $('#main').innerHTML = '<div class="loading">Opening project…</div>';
+  $('#project-name').textContent = '';
+  $('#dialog').close();
+  sessionStorage.removeItem('task-draft');
+  await refresh();
 }
 function heading(eyebrow, title, subtitle, action = '') {
   return `<div class="page-heading"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p class="subtitle">${subtitle}</p></div>${action}</div>`;
@@ -91,6 +137,7 @@ function syncViewUrl() {
   if (location.pathname + location.search + location.hash !== url) history.replaceState(history.state, '', url);
 }
 function go(view) {
+  $('#workspace-tools').open = false;
   const target = resolveView(view);
   if (currentView === target) render(); else location.hash = target;
 }
@@ -112,11 +159,13 @@ function render() {
   $('#mobile-tools').innerHTML = tools;
   $('#crumb').textContent = viewLabel(currentView);
   $('#main').innerHTML = ({overview, work, knowledge, inbox, insights, demo})[currentView]();
-  if (currentView === 'knowledge' && state.context_pages_enabled) window.contextPages.mount($('#context-pages'), async () => {toast('Proposal created. Open project proposals for independent review.');}, message => showSignIn(message));
+  if (currentView === 'knowledge' && state.context_pages_enabled) window.contextPages.mount($('#context-pages'), async () => {await refresh(false);toast('Proposal created. Open Inbox for independent review.');}, message => showSignIn(message), {
+    projectId:selectedProject, onProjectChange:selectProject, onChanged:() => refresh(false)
+  });
   else if (currentView === 'knowledge') $('#search').value = queryFilter;
 }
 function canReview(proposal) {
-  return proposal.status === 'pending' && state.role === owners[proposal.domain] && state.actor !== proposal.author;
+  return proposal.status === 'pending' && state.role === (proposal.review_role || owners[proposal.domain]) && state.actor !== proposal.author;
 }
 function affectedRuns() {
   return state.tasks.filter(t => t.stale && (t.actor ? t.actor === state.actor : t.role === state.role));
@@ -128,8 +177,13 @@ function overviewAttention() {
   const contexts = new Map(state.contexts.map(c => [c.id,c]));
   const items = affectedRuns().slice().reverse().map(t => {
     const required = t.manifest.sources.filter(s => contexts.get(s.id)?.mandatory && contexts.get(s.id).revision !== s.revision);
-    return {priority:required.length ? 0 : 2, label:required.length ? 'Critical' : 'Needs review',
-      title:t.query, detail:required.length ? `Required context changed: ${required.map(s => `${s.id} v${s.revision} → v${contexts.get(s.id).revision}`).join(', ')}. Check this work before continuing.` : 'An accepted source or dependency changed after this run.',
+    const newRules = (t.context_changes || []).filter(c => c.mandatory);
+    if(t.manifest.mandatory_revisions)for(const c of state.contexts.filter(c=>c.mandatory && !Object.hasOwn(t.manifest.mandatory_revisions,c.id))) {
+      if(!newRules.some(change=>change.context_id===c.id))newRules.push({context_id:c.id,title:c.title,revision:c.revision});
+    }
+    const critical = required.length || newRules.length;
+    return {priority:critical ? 0 : 2, label:critical ? 'Critical' : 'Needs review',
+      title:t.query, detail:required.length ? `Required context changed: ${required.map(s => `${s.id} v${s.revision} → v${contexts.get(s.id).revision}`).join(', ')}. Check this work before continuing.` : newRules.length ? `Required context changed: ${newRules.map(c => `${c.title} v${c.revision}`).join(', ')}. Check this work before continuing.` : 'An accepted source or dependency changed after this run.',
       button:'Inspect run', action:'open-run', attrs:`data-id="${esc(t.id)}"`};
   });
   for (const p of state.proposals.filter(p => p.status === 'pending')) {
@@ -235,7 +289,14 @@ async function runDemoCase(id) {
 }
 
 function runOutput(run) {
-  return `<section class="panel result"><div class="form-panel"><div class="result-head"><div><h2>${run.stale ? 'Context has changed' : 'Your task briefing'}</h2><small>${roleNames[run.role]} · ${formatTime(run.created_at)} · ${esc(run.id)}</small></div><span class="tag ${run.stale ? 'amber' : 'green'}">${run.stale ? 'Needs review' : 'Current snapshot'}</span></div>${run.stale ? '<div class="note amber">An accepted dependency changed. This output remains tied to its original sources. Rerun to adopt current knowledge.</div>' : ''}<div class="prose">${esc(run.output)}</div><div class="dialog-actions">${btn('Inspect context','manifest',false,`data-id="${esc(run.id)}"`)}${btn('Rerun with latest context','rerun',false,`data-id="${esc(run.id)}"`)}</div></div></section>`;
+  const changes = (run.context_changes || []).map(c => `<li><strong>${esc(c.title)} · v${c.revision}</strong><p>${esc(c.reason)}</p></li>`).join('');
+  return `<section class="panel result"><div class="form-panel"><div class="result-head"><div><h2>${run.stale ? 'Context has changed' : 'Your task briefing'}</h2><small>${roleNames[run.role]} · ${formatTime(run.created_at)} · ${esc(run.id)}</small></div><span class="tag ${run.stale ? 'amber' : 'green'}">${run.stale ? 'Needs review' : 'Current snapshot'}</span></div>${run.stale ? `<div class="note amber">An accepted dependency changed. This output remains tied to its original sources. Review the change before refreshing.${changes ? `<ul>${changes}</ul>` : ''}</div>` : ''}${run.manifest.context_warnings?.length ? `<div class="note amber">${run.manifest.context_warnings.map(esc).join('<br>')}</div>` : ''}<div class="prose">${esc(run.output)}</div><div class="dialog-actions">${btn('Inspect context','manifest',false,`data-id="${esc(run.id)}"`)}${btn('Rerun with latest context','rerun',false,`data-id="${esc(run.id)}"`)}</div></div></section>`;
+}
+function conversationOutput() {
+  const chat = chats.current;
+  if(!chat)return chats.pending ? `<div class="note amber">The request did not finish. Retry preserves the original message key.</div>${btn('Retry saved message','retry-message')}` : activeRun ? runOutput(activeRun) : '';
+  const last = chat.turns.at(-1);
+  return `<section class="conversation-history" aria-label="Private task conversation"><p class="form-help">Private to your identity and role · ${chat.turns.length}/12 messages · shared decisions require a separate proposal.</p>${chat.turns.map(turn => `<article><h3 class="conversation-goal">${esc(turn.query)}</h3>${turn.refresh_context ? '<p class="note">Current accepted context adopted. Earlier working history was reset; prior messages remain saved.</p>' : ''}${turn.status === 'succeeded' ? runOutput(state.tasks.find(t=>t.id===turn.id) || turn) : `<div class="note amber" role="status">${turn.status === 'pending' ? 'Reply in progress. Updates appear here automatically.' : 'Reply failed. Retry uses the same message and source snapshot.'}</div>`}</article>`).join('')}${chats.pending || (last && last.status !== 'succeeded') ? `<div class="button-group">${btn('Retry saved message','retry-message')}${btn('Check for reply','refresh-conversation')}</div>` : ''}</section>`;
 }
 function taskRows(list) {
   return list.map(t => `<div class="task-row"><div><strong>${esc(t.query)}</strong><small>${roleNames[t.role]} · ${t.manifest.sources.length} sources · ${formatTime(t.created_at)}</small></div><div class="button-group"><span class="tag ${t.stale ? 'amber' : 'green'}">${t.stale ? 'Needs review' : 'Current'}</span>${btn('Open run','open-run',false,`data-id="${esc(t.id)}"`)}</div></div>`).join('');
@@ -247,9 +308,14 @@ function work() {
   const list = state.tasks.slice().reverse();
   const attention = attentionCount();
   const budget = sessionStorage.getItem('task-budget') || '6000';
-  return heading('WORK','What are you working on?','Start a task with your team’s accepted decisions.')+
+  const chat = chats.current;
+  const history = (state.conversations || []).slice().reverse();
+  const segmentStart = chat?.turns.findLastIndex(t=>t.refresh_context) ?? -1;
+  const needsRefresh = chat?.turns.slice(Math.max(0,segmentStart)).some(t => state.tasks.find(run=>run.id===t.id)?.stale || t.stale);
+  return heading('WORK',chat ? esc(chat.title) : 'What are you working on?','Work privately with your agent using your team’s accepted decisions.',chat ? btn('New task','new-conversation') : '')+
   `<div class="workspace-summary"><span>${roleNames[state.role]} · ${state.contexts.length} accepted topics</span>${attention ? btn(`${attention} items need your attention`,'navigate',false,'data-view="inbox"') : ''}</div>`+
-  `<div class="workbench"><div><section class="panel"><form id="task-form" class="form-panel"><label class="field" for="task-query">Task goal<textarea id="task-query" name="query" required minlength="3" maxlength="2000" placeholder="Describe your task or the decision you need help with…">${esc(sessionStorage.getItem('task-draft') || '')}</textarea></label><details class="task-options"><summary>Advanced options</summary><label class="field">Context budget<select name="budget" id="task-budget">${['6000','3000','1000','12000'].map(value => `<option value="${value}" ${value === budget ? 'selected' : ''}>${Number(value).toLocaleString()} estimated tokens</option>`).join('')}</select></label><p class="form-help">Source-only budget uses conservative byte estimates. Instructions, task text, and output are outside this budget.</p></details><div class="task-actions"><button class="btn primary" type="submit">${icon('spark')} ${state.ai_mode === 'offline' ? 'Run rehearsal' : 'Ask Gemini'}</button><button type="button" class="text-btn" data-action="task-suggestion">Use a suggested task</button></div><p class="form-help">${state.ai_mode === 'offline' ? 'Offline rehearsal · deterministic source briefing.' : 'Gemini drafts work. Shared decisions still require review.'}</p></form></section>${activeRun ? runOutput(activeRun) : ''}</div>${taskSources()}</div>`+
+  `<div class="workbench"><div><section class="panel"><form id="task-form" class="form-panel"><label class="field" for="task-query">${chat ? 'Follow-up' : 'Task goal'}<textarea id="task-query" name="query" required minlength="3" maxlength="2000" placeholder="Describe your task or the decision you need help with…">${esc(sessionStorage.getItem('task-draft') || '')}</textarea></label>${chat ? `<label class="refresh-context"><input type="checkbox" name="refresh_context" ${needsRefresh ? 'required' : ''}> ${needsRefresh ? 'Accepted context changed. Review the sources, then' : 'Optionally'} refresh accepted context and start a new working segment.</label>` : ''}<details class="task-options"><summary>Advanced options</summary><label class="field">Context budget<select name="budget" id="task-budget">${['6000','3000','1000','12000'].map(value => `<option value="${value}" ${value === budget ? 'selected' : ''}>${Number(value).toLocaleString()} estimated tokens</option>`).join('')}</select></label><p class="form-help">Source-only budget uses conservative byte estimates. Instructions, task text, and output are outside this budget.</p></details><div class="task-actions"><button class="btn primary" type="submit">${icon('spark')} ${state.ai_mode === 'offline' ? 'Run rehearsal' : 'Ask Gemini'}</button><button type="button" class="text-btn" data-action="task-suggestion">Use a suggested task</button></div><p class="form-help">${state.ai_mode === 'offline' ? 'Offline rehearsal · deterministic source briefing.' : 'Gemini drafts work. Shared decisions still require review.'} Messages are saved privately so you can resume later.</p></form></section>${conversationOutput()}</div>${taskSources()}</div>`+
+  `<section class="panel gap-top"><div class="panel-head"><div><h2>Saved conversations</h2><p>Only conversations belonging to your identity and role appear here.</p></div><span class="tag">${history.length}</span></div>${history.length ? history.map(c=>`<div class="task-row"><div><strong>${esc(c.title)}</strong><small>${c.turn_ids.length} messages · ${formatTime(c.updated_at)}</small></div>${btn('Resume task','open-conversation',false,`data-id="${esc(c.id)}"`)}</div>`).join('') : empty('No saved conversations yet','Your next task starts a private conversation.')}</section>`+
   `<section class="panel gap-top"><div class="panel-head"><div><h2>Recent work</h2><p>Open a run to inspect its answer and sources.</p></div><span class="tag">${list.length} runs</span></div>${list.length ? taskRows(list) : empty('Your first task starts here','Describe what you need help with above.')}</section>`;
 }
 function inbox() {
@@ -285,7 +351,7 @@ function modal(title, subtitle, body) {
 }
 async function openContext(id) {
   const c = state.contexts.find(c => c.id === id); if (!c) return;
-  await api('activity',{action:'context_viewed',target_id:id});
+  await api('activity',{action:'context_viewed',target_id:id,project_id:selectedProject || null});
   selectedContext = c;
   modal(esc(c.title),`${esc(c.id)} · ${esc(c.domain)} · ${roleNames[c.owner]} · Accepted v${c.revision}`,
     `<div class="button-group"><span class="tag green">Accepted</span><span class="tag">${esc(c.policy)} policy</span>${c.mandatory ? '<span class="tag amber">Mandatory constraint</span>' : ''}</div><div class="prose gap-top">${esc(c.body)}</div><div class="note">Source: ${c.sources.map(esc).join(', ')}${c.dependencies.length ? `<br>Depends on: ${c.dependencies.map(esc).join(', ')}` : ''}</div><div class="dialog-actions">${btn('Propose a change','edit',true)}</div><details class="history"><summary>Revision history · ${c.history.length} versions</summary>${c.history.slice().reverse().map(h => `<div class="history-entry"><strong class="tag">v${h.revision}</strong><small>${esc(h.actor)} · ${new Date(h.at).toLocaleString()}</small><p>${esc(h.body)}</p><small>${esc(h.reason)}</small>${h.revision !== c.revision ? btn(`Propose restoring v${h.revision}`,'restore',false,`data-revision="${h.revision}"`) : ''}</div>`).join('')}</details>`);
@@ -301,9 +367,12 @@ async function manifest(id) {
   modal('Context used',`${esc(t.id)} · ${t.manifest.sources.length} sources · ${t.manifest.estimated_tokens.toLocaleString()} estimated tokens`,
     `<div class="note ${t.stale ? 'amber' : ''}">${t.stale ? 'This run is affected by a newer accepted decision. These are the exact original inputs.' : 'These are the exact accepted source bodies supplied to this run.'}</div>${t.manifest.sources.map(s => `<details class="history"><summary>${esc(s.id)} · v${s.revision} · ${esc(s.title)}</summary><div class="prose gap-top">${esc(s.body)}</div></details>`).join('')}<p class="form-help">Estimator: ${esc(t.manifest.estimator)}. Context budget: ${t.manifest.budget}. Model: ${esc(t.usage.model || 'Offline rehearsal')}. Provider-reported total: ${t.usage.total_tokens ?? 'unavailable'}.</p>`);
 }
-async function runTask(query,budget) {
-  const run = await api('tasks',{query,budget}); activeRun = run;
-  await refresh(); go('work'); toast('Task saved with its source manifest.');
+async function runTask(query,budget,refreshContext=false) {
+  const version = protectedVersion;
+  await chats.send(query,budget,refreshContext,selectedProject || null);
+  if (version !== protectedVersion) return;
+  sessionStorage.removeItem('task-draft');
+  await refresh(); toast('Message saved with its exact source manifest.');
 }
 function addKnowledge() {
   modal('Bring knowledge into the workspace','Extract a candidate from notes or write a topic directly. Both require review.',
@@ -315,6 +384,8 @@ function clearProtectedView() {
   protectedVersion++;
   window.contextPages.clear();
   state = undefined; activeRun = undefined; selectedContext = undefined;
+  chats.clear();
+  selectedProject = ''; sessionStorage.removeItem('context-project');
   queryFilter = ''; domainFilter = 'All domains'; inboxFilter = 'pending';
   demoCatalog = []; demoReports = {}; demoPositions = {}; demoCompleted = {};
   sessionStorage.removeItem('task-draft');
@@ -348,7 +419,12 @@ async function action(el) {
   const a = el.dataset.action, id = el.dataset.id;
   if (a === 'retry-sign-in') return bootstrapIdentity();
   if (a === 'refresh-overview') return refresh();
+  if (a === 'new-conversation') {chats.clear();activeRun=undefined;sessionStorage.removeItem('task-draft');render();return;}
+  if (a === 'open-conversation') {await chats.open(id);go('work');return;}
+  if (a === 'retry-message') {await chats.retry();await refresh();return;}
+  if (a === 'refresh-conversation') {await chats.reload();return;}
   if (a === 'sign-out') {
+    clearProtectedView();
     await window.contextosIdentity.signOut();
     showSignIn('You signed out of this browser.');
     return;
@@ -399,8 +475,8 @@ async function action(el) {
   if (a === 'edit') return editContext();
   if (a === 'restore') {const h = selectedContext.history.find(x => x.revision === Number(el.dataset.revision)); return editContext(h.body,`Restore content from v${h.revision}; preserve all subsequent revision history.`);}
   if (a === 'manifest') return manifest(id);
-  if (a === 'open-run') {activeRun = state.tasks.find(t => t.id === id); go('work'); window.scrollTo({top:0,behavior:'smooth'}); return;}
-  if (a === 'ingest') return addKnowledge();
+  if (a === 'open-run') {chats.clear();activeRun = state.tasks.find(t => t.id === id); go('work'); window.scrollTo({top:0,behavior:'smooth'}); return;}
+  if (a === 'ingest') return selectedProject ? go('knowledge') : addKnowledge();
   if (a === 'knowledge-mode') {
     const manual = el.dataset.mode === 'manual';
     $('#manual-proposal-form').hidden = !manual;
@@ -414,17 +490,18 @@ async function action(el) {
   }
   if (a === 'guide') return go('demo');
   if (a === 'export') {
-    const data = await api('export'); const url = URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})); const link = document.createElement('a'); link.href = url; link.download = 'contextos-evidence.json'; link.click(); URL.revokeObjectURL(url); toast('Visible workspace evidence exported.'); return;
+    const data = await api('export' + projectQuery()); const url = URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})); const link = document.createElement('a'); link.href = url; link.download = 'contextos-evidence.json'; link.click(); URL.revokeObjectURL(url); toast('Visible workspace evidence exported.'); return;
   }
-  if (a === 'approve' || a === 'reject') {const p = state.proposals.find(x => x.id === id); await api(`proposals/${id}/review`,{hash:p.hash,decision:a}); await refresh(); toast(a === 'approve' ? 'Revision published. Dependent runs checked for impact.' : 'Proposal rejected. Accepted context is unchanged.');}
-  if (a === 'rerun') {const t = state.tasks.find(x => x.id === id); await runTask(t.query,t.manifest.budget);}
+  if (a === 'approve' || a === 'reject') {const p = state.proposals.find(x => x.id === id); await api(p.project_id ? `context/projects/${encodeURIComponent(p.project_id)}/proposals/${id}/review` : `proposals/${id}/review`,{hash:p.hash,decision:a === 'approve' ? 'approve' : 'reject'}); await refresh(); toast(a === 'approve' ? 'Revision published. Dependent runs checked for impact.' : 'Proposal rejected. Accepted context is unchanged.');}
+  if (a === 'rerun') {const t = state.tasks.find(x => x.id === id);chats.clear();await runTask(t.query,t.manifest.budget);}
 }
 document.addEventListener('click', async e => {
+  if(!e.target.closest('#workspace-tools') || e.target.closest('#mobile-tools a'))$('#workspace-tools').open = false;
   const knowledgeLink = e.target.closest('a[href="/knowledge"]');
   if (knowledgeLink && e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
     e.preventDefault(); go('knowledge'); return;
   }
-  const el = e.target.closest('[data-action]'); if (!el || busy) return;
+  const el = e.target.closest('[data-action]'); if (!el || (busy && el.dataset.action !== 'sign-out')) return;
   busy = true; const wasDisabled = el.disabled; el.disabled = true;
   try {await action(el);} catch(err) {toast(err.message,true);} finally {el.disabled = wasDisabled; busy = false;}
 });
@@ -434,8 +511,16 @@ document.addEventListener('submit', async e => {
   const button = form.querySelector('[type="submit"]'), previous = button.innerHTML; button.disabled = true; button.textContent = 'Working…';
   const data = Object.fromEntries(new FormData(form));
   try {
-    if (form.id === 'task-form') {sessionStorage.setItem('task-draft',data.query); await runTask(data.query,Number(data.budget));}
-    if (form.id === 'proposal-form') {await api('proposals',{context_id:selectedContext.id,base_revision:selectedContext.revision,body:data.body,reason:data.reason,sources:selectedContext.sources}); $('#dialog').close(); inboxFilter = 'pending'; await refresh(); go('inbox'); toast('Change proposed. The accepted revision is unchanged.');}
+    if (form.id === 'task-form') {sessionStorage.setItem('task-draft',data.query); await runTask(data.query,Number(data.budget),data.refresh_context === 'on');}
+    if (form.id === 'proposal-form') {
+      if (selectedContext.project_id) {
+        const path = `context/projects/${encodeURIComponent(selectedContext.project_id)}/contexts/${encodeURIComponent(selectedContext.id)}`;
+        const original = await api(path);
+        const {name,filename,owner,owner_type,relationships} = original;
+        await api(path,{name,filename,owner,owner_type,relationships,content:data.body,reason:data.reason,expected_version:selectedContext.revision},'PUT');
+      } else await api('proposals',{context_id:selectedContext.id,base_revision:selectedContext.revision,body:data.body,reason:data.reason,sources:selectedContext.sources});
+      $('#dialog').close(); inboxFilter = 'pending'; await refresh(); go('inbox'); toast('Change proposed. The accepted revision is unchanged.');
+    }
     if (form.id === 'manual-proposal-form') {const {source,...proposal} = data; await api('proposals',{...proposal,sources:[source]}); $('#dialog').close(); inboxFilter = 'pending'; await refresh(); go('inbox'); toast('Manual proposal created. Independent owner review is required.');}
     if (form.id === 'ingest-form') {await api('ingest',data); $('#dialog').close(); inboxFilter = 'pending'; await refresh(); go('inbox'); toast('Review candidate created.');}
     if (form.id === 'login-form') {
@@ -449,7 +534,7 @@ document.addEventListener('submit', async e => {
 $('#persona').addEventListener('change',async e => {
   if (busy) {e.target.value = state.role; return;}
   busy = true; e.target.disabled = true;
-  try {await api('persona',{role:e.target.value}); activeRun = undefined; selectedContext = undefined; inboxFilter = 'pending'; $('#dialog').close(); await refresh(); toast(`Viewing as ${roleNames[state.role]}. Permissions applied.`);} catch(err) {e.target.value = state.role; toast(err.message,true);} finally {busy = false; e.target.disabled = state?.auth_mode !== 'demo';}
+  try {await api('persona',{role:e.target.value}); chats.clear();activeRun = undefined; selectedContext = undefined; inboxFilter = 'pending'; sessionStorage.removeItem('task-draft');$('#dialog').close(); await refresh(); toast(`Viewing as ${roleNames[state.role]}. Permissions applied.`);} catch(err) {e.target.value = state.role; toast(err.message,true);} finally {busy = false; e.target.disabled = state?.auth_mode !== 'demo';}
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'search' && !e.isComposing) {queryFilter = e.target.value; updateKnowledgeResults();}
@@ -459,6 +544,12 @@ document.addEventListener('compositionend', e => {
   if (e.target.id === 'search') {queryFilter = e.target.value; updateKnowledgeResults();}
 });
 document.addEventListener('change',e => {if (e.target.id === 'demo-category') {demoCategory = e.target.value; render();} if (e.target.id === 'domain-filter') {domainFilter = e.target.value; updateKnowledgeResults();} if (e.target.id === 'task-budget') sessionStorage.setItem('task-budget',e.target.value);});
+document.addEventListener('keydown',e => {
+  if(e.key === 'Escape' && $('#workspace-tools').open) {
+    $('#workspace-tools').open = false;
+    $('#workspace-tools summary').focus();
+  }
+});
 $('#dialog').addEventListener('click', e => {
   const dialog = $('#dialog');
   if (e.target !== dialog || busy) return;

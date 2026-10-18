@@ -2,6 +2,21 @@
 
 Last updated: 18 October 2026, Asia/Kolkata.
 
+## Current integration
+
+Knowledge's existing project picker controls Work, Inbox, Overview and exports.
+Approved pages are canonical; proposal review and stale-work flags are atomic.
+Work uses saved private conversations with exact per-turn sources, retries and
+explicit refresh. Older workspace data remains separate and compatible.
+
+The extra synthetic project initializer, button, header selector and recording
+instructions have been removed at the user's request. The mobile More menu is
+scoped and dismissible. Keep further changes focused on the actual application;
+the user will prepare the live demo. Local server: http://127.0.0.1:8000.
+Live Google services and visual browser verification remain separate checks.
+The generated local samples are archived with history retained. Validation:
+106 Python tests pass (one optional MCP skip) and 52 JavaScript contracts pass.
+
 ## User direction
 
 Build ContextOS feature by feature from the two supplied documents, commit stages locally, and maintain context.md, features.md, requirements.md, handoff.md and design/architecture.md. Git author: **Faizan Choudhary <choudharyfaizan15@gmail.com>**.

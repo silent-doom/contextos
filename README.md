@@ -16,6 +16,7 @@ A requirement should survive the handoff from a product conversation to implemen
 - **Bounded retrieval:** Permission filtering, mandatory constraints, explicit context budgets, and exact source manifests.
 - **Change awareness:** Dependency-based stale-run alerts, fresh reruns, and rollback through new revisions.
 - **Inspectable behavior:** Review comparisons, history, attributable audit events, and separate estimates/provider usage.
+- **Connected project work:** Knowledge, Inbox, Overview and agent tasks use the same approved project pages. Private saved conversations support follow-ups, exact per-turn sources, safe retries and explicit context refresh.
 - **Interactive demo:** Five personas and twelve step-by-step walkthroughs with Next/Back, captured checkpoints, and a step activity log.
 
 ## Quick start
