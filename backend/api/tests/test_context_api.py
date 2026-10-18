@@ -16,6 +16,7 @@ from mcp.client.stdio import stdio_client
 from backend import domain as d
 from backend.app import create_app
 from backend.ai import AI
+from backend.data.storage import MarkdownStorage
 
 
 class MemoryStore:
@@ -33,9 +34,9 @@ class MemoryStore:
 
 
 @pytest.fixture
-def client(monkeypatch):
+def client(monkeypatch, tmp_path):
     monkeypatch.setenv('AUTH_MODE', 'demo')
-    with TestClient(create_app(store=MemoryStore(), ai=AI(mode='offline')), headers={'X-ContextOS-Client': 'workspace'}) as client:
+    with TestClient(create_app(store=MemoryStore(), ai=AI(mode='offline'), markdown_storage=MarkdownStorage(tmp_path / 'storage')), headers={'X-ContextOS-Client': 'workspace'}) as client:
         yield client
 
 
@@ -221,23 +222,48 @@ def test_relationship_freshness_propagates_and_refresh_is_reviewed(client):
     second = publish(client, project, 'design.md', relationships=[{'target_id': first['id'], 'kind': 'depends_on'}])
     third = publish(client, project, 'implementation.md', relationships=[{'target_id': second['id'], 'kind': 'depends_on'}])
     reference = publish(client, project, 'notes.md', relationships=[{'target_id': first['id'], 'kind': 'references'}])
+    unrelated = publish(client, project, 'unrelated.md')
     root = base(project)
     proposal = client.put(root + '/contexts/' + first['id'], json=replacement(first, content=first['content'].replace('evidence', 'new evidence'))).json()
+    assert client.get(root + '/contexts/' + reference['id'] + '/status').json()['requires_review'] is False
     approve(client, project, proposal)
     assert client.get(root + '/contexts/' + second['id'] + '/status').json()['status'] == 'stale'
     assert client.get(root + '/contexts/' + third['id'] + '/status').json()['status'] == 'stale'
-    assert client.get(root + '/contexts/' + reference['id'] + '/status').json()['up_to_date'] is True
-    assert {node['id'] for node in client.get(root + '/impact/' + first['id']).json()['contexts']} == {second['id'], third['id']}
+    state = client.get(root + '/contexts/' + reference['id'] + '/status').json()
+    assert state['requires_review'] and not state['up_to_date'] and state['status_label'] == 'Requires review'
+    assert state['changed_relationships'] == [{'source_id': reference['id'], 'source_name': reference['name'],
+        'target_id': first['id'], 'target_name': first['name'], 'kind': 'references',
+        'reviewed_version': 1, 'current_version': 2, 'reason': 'version_changed'}]
+    assert client.get(root + '/contexts/' + unrelated['id'] + '/status').json()['status_label'] == 'Up to date'
+    assert {node['id'] for node in client.get(root + '/impact/' + first['id']).json()['contexts']} == {second['id'], third['id'], reference['id']}
+    # Every current-context JSON surface exposes the same review data.
+    path = root + '/contexts/' + reference['id']
+    rows = [client.get(path).json(), client.get(path + '/sections').json(),
+            client.post(path + '/extract', json={}).json(),
+            next(row for row in client.get(root).json()['contexts'] if row['id'] == reference['id']),
+            next(row for row in client.get(root + '/contexts').json()['items'] if row['id'] == reference['id']),
+            client.get(root + '/search?q=notes').json()['items'][0],
+            next(row for row in client.get(root + '/graph').json()['nodes'] if row['id'] == reference['id'])]
+    for row in rows:
+        for field in ('status', 'status_label', 'up_to_date', 'requires_review', 'changed_relationships'):
+            assert row[field] == state[field]
     refresh = client.put(root + '/contexts/' + second['id'], json=replacement(second)).json()
+    assert client.get(root + '/contexts/' + second['id'] + '/status').json()['requires_review']
     approve(client, project, refresh)
     assert client.get(root + '/contexts/' + second['id'] + '/status').json()['up_to_date']
     assert not client.get(root + '/contexts/' + third['id'] + '/status').json()['up_to_date']
+    assert client.get(root + '/contexts/' + second['id'] + '/status').json()['changed_relationships'] == []
+    rejected = client.put(path, json=replacement(reference)).json()
+    client.post('/api/persona', json={'role': 'architect'})
+    assert client.post(root + '/proposals/' + rejected['id'] + '/review', json={'hash': rejected['hash'], 'decision': 'reject'}).status_code == 200
+    assert client.get(path + '/status').json()['requires_review']
 
 
-def test_changed_dependency_blocks_publication_and_linked_deletion(client):
+@pytest.mark.parametrize('kind', ['depends_on', 'references'])
+def test_changed_dependency_blocks_publication_and_linked_deletion(client, kind):
     project = create_project(client)
     source = publish(client, project, 'source.md')
-    pending = client.post(base(project) + '/contexts', json=candidate(client, 'consumer.md', relationships=[{'target_id': source['id'], 'kind': 'depends_on'}])).json()
+    pending = client.post(base(project) + '/contexts', json=candidate(client, 'consumer.md', relationships=[{'target_id': source['id'], 'kind': kind}])).json()
     update = client.put(base(project) + '/contexts/' + source['id'], json=replacement(source)).json()
     approve(client, project, update)
     client.post('/api/persona', json={'role': 'architect'})
@@ -247,6 +273,55 @@ def test_changed_dependency_blocks_publication_and_linked_deletion(client):
     deletion = client.request('DELETE', base(project) + '/contexts/' + source['id'], json={'expected_version': 2, 'reason': 'Remove source'}).json()
     client.post('/api/persona', json={'role': 'architect'})
     assert client.post(base(project) + '/proposals/' + deletion['id'] + '/review', json={'hash': deletion['hash'], 'decision': 'approve'}).status_code == 409
+
+
+def test_legacy_reference_baselines_use_history_without_changing_old_records(client):
+    from backend.api import service as s
+    state = {}
+    item = s.project(state, s.create_project(state, 'author', {'name': 'Legacy', 'project_type': 'software'})['id'])
+    def accepted(filename, **overrides):
+        proposal = s.propose(item, 'author', 'create', candidate(client, filename, **overrides))
+        proposal.pop('relationship_versions')
+        proposal['hash'] = s.proposal_hash(proposal)
+        s.review(item, 'reviewer', 'architect', proposal['id'], {'hash': proposal['hash'], 'decision': 'approve'})
+        doc = item['contexts'][proposal['context_id']]
+        doc.pop('relationship_versions')
+        doc['history'][0].pop('relationship_versions')
+        return doc
+    source = accepted('source.md')
+    linked = accepted('notes.md', relationships=[{'target_id': source['id'], 'kind': 'references'}])
+    before = deepcopy(item)
+    assert not s.status(item, linked)['requires_review']
+    assert item == before
+    pending = s.propose(item, 'author', 'update', replacement(linked), linked['id'])
+    pending.pop('relationship_versions')
+    pending['hash'] = s.proposal_hash(pending)
+    change = s.propose(item, 'author', 'update', replacement(source), source['id'])
+    s.review(item, 'reviewer', 'architect', change['id'], {'hash': change['hash'], 'decision': 'approve'})
+    assert s.status(item, linked)['changed_relationships'][0]['reviewed_version'] == 1
+    assert s.status(item, linked)['requires_review']
+    with pytest.raises(d.Problem):
+        s.review(item, 'reviewer', 'architect', pending['id'], {'hash': pending['hash'], 'decision': 'approve'})
+    assert item['contexts'][linked['id']]['history'] == before['contexts'][linked['id']]['history']
+
+
+def test_reference_cycles_terminate_and_missing_baselines_require_review(client):
+    from backend.api import service as s
+    project = create_project(client)
+    first = publish(client, project, 'first.md')
+    second = publish(client, project, 'second.md', relationships=[{'target_id': first['id'], 'kind': 'references'}])
+    change = client.put(base(project) + '/contexts/' + first['id'], json=replacement(first, relationships=[{'target_id': second['id'], 'kind': 'references'}])).json()
+    approve(client, project, change)
+    assert not client.get(base(project) + '/contexts/' + first['id'] + '/status').json()['requires_review']
+    assert client.get(base(project) + '/contexts/' + second['id'] + '/status').json()['requires_review']
+    item = next(iter(client.app.state.store.states.values()))['context_projects'][project['id']]
+    doc = deepcopy(item['contexts'][second['id']])
+    doc['relationship_versions'] = {}
+    result = s.status(item, doc)
+    assert result['requires_review'] and result['changed_relationships'][0]['reason'] == 'untracked'
+    missing = deepcopy(item)
+    missing['contexts'].pop(first['id'])
+    assert s.status(missing, doc)['changed_relationships'][0]['reason'] == 'missing'
 
 
 def test_structure_safe_filenames_relationship_boundaries_and_cycles(client):
@@ -290,9 +365,12 @@ def test_proposal_hash_binds_owner_filename_relationships_and_content(client):
         altered = deepcopy(proposal)
         altered['candidate'][key] = value
         assert proposal_hash(altered) != proposal['hash']
+    altered = deepcopy(proposal)
+    altered['relationship_versions']['other'] = 2
+    assert proposal_hash(altered) != proposal['hash']
 
 
-def test_workspace_isolation_and_firebase_trusted_identity(monkeypatch):
+def test_workspace_isolation_and_firebase_trusted_identity(monkeypatch, tmp_path):
     import firebase_admin
     from firebase_admin import auth
     monkeypatch.setenv('AUTH_MODE', 'firebase')
@@ -304,9 +382,10 @@ def test_workspace_isolation_and_firebase_trusted_identity(monkeypatch):
         return {'uid': token, 'contextos_workspace': 'other' if token == 'two' else 'team',
                 'contextos_role': 'architect' if token == 'reviewer' else 'developer'}
     monkeypatch.setattr(auth, 'verify_id_token', verify)
-    with TestClient(create_app(store=MemoryStore(), ai=AI(mode='offline')), headers={'X-ContextOS-Client': 'workspace'}) as client:
+    with TestClient(create_app(store=MemoryStore(), ai=AI(mode='offline'), markdown_storage=MarkdownStorage(tmp_path / 'storage')), headers={'X-ContextOS-Client': 'workspace'}) as client:
         assert client.get('/api/context/projects').status_code == 401
         client.headers['Authorization'] = 'Bearer one'
+        assert client.post('/api/context/projects/samples', json={}).status_code == 403
         project = create_project(client)
         proposal = client.post(base(project) + '/contexts', json=candidate(client)).json()
         client.headers['Authorization'] = 'Bearer two'
@@ -316,6 +395,65 @@ def test_workspace_isolation_and_firebase_trusted_identity(monkeypatch):
         assert client.post(base(project) + '/proposals/' + proposal['id'] + '/review', json={'hash': proposal['hash'], 'decision': 'approve'}).status_code == 404
         client.headers['Authorization'] = 'Bearer reviewer'
         assert client.post(base(project) + '/proposals/' + proposal['id'] + '/review', json={'hash': proposal['hash'], 'decision': 'approve'}).status_code == 200
+
+
+def test_markdown_files_are_saved_for_proposals_and_approved_versions(client):
+    project = create_project(client)
+    storage = client.app.state.markdown_storage.root
+    assert list(storage.rglob('*.md')) == []
+    proposal = client.post(base(project) + '/contexts', json=candidate(client)).json()
+    assert len(list(storage.rglob('candidate.md'))) == 1
+    assert (storage / 'projects' / project['id'] / 'proposals' / proposal['id'] / 'candidate.md').is_file()
+    assert not (storage / 'workspaces').exists()
+    assert list(storage.rglob('v*.md')) == []
+    assert client.get(base(project) + '/contexts').json()['total'] == 0
+    approve(client, project, proposal)
+    path = base(project) + '/contexts/' + proposal['context_id']
+    original = client.get(path).json()
+    first = next(storage.rglob('v000001-*.md'))
+    assert first.read_text(encoding='utf-8') == original['content']
+    change = client.put(path, json=replacement(original, content=original['content'] + '\nNew evidence.')).json()
+    assert not list(storage.rglob('v000002-*.md'))
+    approve(client, project, change)
+    assert first.read_text(encoding='utf-8') == original['content']
+    assert len(list(storage.rglob('v000002-*.md'))) == 1
+    assert client.get(path + '/versions/1').json()['content'] == original['content']
+    first.write_text('Unreviewed disk change', encoding='utf-8')
+    assert client.get(path + '/versions/1').status_code == 409
+
+
+def test_storage_failure_does_not_commit_a_proposal(client, monkeypatch):
+    from backend.domain import Problem
+    project = create_project(client)
+    def fail(*args):
+        raise Problem('Markdown storage is unavailable.', 503)
+    monkeypatch.setattr(client.app.state.markdown_storage, 'sync', fail)
+    assert client.post(base(project) + '/contexts', json=candidate(client)).status_code == 503
+    assert client.get(base(project) + '/proposals').json() == []
+
+
+def test_two_sample_projects_are_idempotent_and_workspace_isolated(client):
+    first = client.post('/api/context/projects/samples', json={})
+    assert first.status_code == 200
+    projects = first.json()
+    assert [item['name'] for item in projects] == ['Checkout Reliability', 'Research Assistant']
+    assert client.post('/api/context/projects/samples', json={}).json() == projects
+    assert len(client.get('/api/context/projects').json()) == 2
+    context_ids = []
+    for project in projects:
+        details = client.get(base(project)).json()
+        assert len(details['contexts']) == 4 and details['relationships']
+        context_ids.extend(doc['id'] for doc in details['contexts'])
+    assert len(set(context_ids)) == 8
+    storage = client.app.state.markdown_storage.root
+    assert len(list(storage.rglob('v*.md'))) == 8
+    client.cookies.clear()
+    assert client.get('/api/context/projects').json() == []
+    assert client.get(base(projects[0])).status_code == 404
+    other = client.post('/api/context/projects/samples', json={}).json()
+    assert {item['id'] for item in other}.isdisjoint(item['id'] for item in projects)
+    assert {path.name for path in (storage / 'projects').iterdir()} == {item['id'] for item in projects + other}
+    assert not (storage / 'workspaces').exists()
 
 
 def test_real_mcp_stdio_creates_empty_project_and_proposes_context(client):
@@ -352,6 +490,42 @@ def test_real_mcp_stdio_creates_empty_project_and_proposes_context(client):
                     assert proposed_context['filename'] == 'research.md'
                     assert proposed_context['name'] == 'Research Findings'
                     assert (await call('discover_context', {'project_id': project_id}))['total'] == 0
+                    # Publish test fixtures with an independent reviewer; agents have no approval tool.
+                    from backend.api import service as s
+                    store = client.app.state.store
+                    workspace = next(wid for wid, state in store.states.items() if project_id in s.projects(state))
+                    def accept(proposal):
+                        store.mutate(workspace, lambda state: s.review(s.project(state, project_id), 'test-reviewer', 'architect',
+                            proposal['id'], {'hash': proposal['hash'], 'decision': 'approve'}))
+                    accept(proposal)
+                    source_id = proposal['context_id']
+                    reference = await call('create_context', {'project_id': project_id, 'context': {
+                        **proposed_context, 'name': 'Research Summary', 'filename': 'summary.md',
+                        'relationships': [{'target_id': source_id, 'kind': 'references'}], 'reason': 'Summarize findings'}})
+                    accept(reference)
+                    linked_id = reference['context_id']
+                    args = {'project_id': project_id, 'context_id': linked_id}
+                    assert (await call('get_context_status', args))['status_label'] == 'Up to date'
+                    update = await call('update_context', {'project_id': project_id, 'context_id': source_id,
+                        'changes': {**proposed_context, 'expected_version': 1, 'reason': 'New findings',
+                                    'content': template['content'].replace('## Details', '## Details\n\nNew evidence.')}})
+                    accept(update)
+                    state = await call('get_context_status', args)
+                    assert state['requires_review'] and state['status_label'] == 'Requires review'
+                    assert state['changed_relationships'][0]['target_id'] == source_id
+                    assert state['changed_relationships'][0]['current_version'] == 2
+                    rows = [await call('read_context', args), await call('read_context_sections', args),
+                            await call('extract_context', {**args, 'selection': {}})]
+                    for name, arguments, field in [
+                        ('read_project', {'project_id': project_id}, 'contexts'),
+                        ('discover_context', {'project_id': project_id}, 'items'),
+                        ('search_context', {'project_id': project_id, 'query': 'summary'}, 'items'),
+                        ('read_context_graph', {'project_id': project_id}, 'nodes'),
+                        ('inspect_context_impact', {'project_id': project_id, 'context_id': source_id}, 'contexts')]:
+                        rows.append(next(row for row in (await call(name, arguments))[field] if row['id'] == linked_id))
+                    for row in rows:
+                        assert row['requires_review'] and row['status_label'] == state['status_label']
+                        assert row['changed_relationships'] == state['changed_relationships']
         asyncio.run(run())
     finally:
         server.should_exit = True

@@ -5,7 +5,7 @@ from backend.api.markdown import HEADINGS, TEMPLATE, sections
 from backend.domain import Problem
 
 
-def create_router(workspace_endpoint):
+def create_router(workspace_endpoint, demo_mode=False):
     router = APIRouter(dependencies=[Depends(workspace_endpoint)])
 
     def read(request):
@@ -14,7 +14,14 @@ def create_router(workspace_endpoint):
 
     def mutate(request, operation):
         wid, actor, role = request.state.identity_info
-        return request.app.state.store.mutate(wid, lambda state: operation(state, actor, role))
+        def save(state):
+            result = operation(state, actor, role)
+            request.app.state.markdown_storage.sync(state)
+            return result
+        return request.app.state.store.mutate(wid, save)
+
+    def markdown_content(request, item, doc):
+        return request.app.state.markdown_storage.revision(item['id'], doc)
 
     def get_project(request, project_id):
         return s.project(read(request), project_id)
@@ -34,6 +41,13 @@ def create_router(workspace_endpoint):
     @router.post('/projects', status_code=201)
     def create_project(body: models.NewProject, request: Request):
         return mutate(request, lambda state, actor, role: s.create_project(state, actor, body.model_dump()))
+
+    @router.post('/projects/samples')
+    def sample_projects(request: Request):
+        if not demo_mode:
+            raise Problem('Sample projects are available only in demo mode.', 403)
+        from backend.api.samples import create_samples
+        return mutate(request, lambda state, actor, role: create_samples(state, actor))
 
     @router.get('/projects/{project_id}')
     def project(project_id: str, request: Request):
@@ -68,7 +82,8 @@ def create_router(workspace_endpoint):
     @router.get('/projects/{project_id}/contexts/{context_id}')
     def context(project_id: str, context_id: str, request: Request, max_chars: int = Query(default=12000, ge=1, le=12000)):
         item, doc = get_context(request, project_id, context_id)
-        return {**s.context_metadata(item, doc), 'content': doc['content'][:max_chars], 'truncated': len(doc['content']) > max_chars}
+        content = markdown_content(request, item, doc)
+        return {**s.context_metadata(item, doc), 'content': content[:max_chars], 'truncated': len(content) > max_chars}
 
     @router.put('/projects/{project_id}/contexts/{context_id}')
     def update_context(project_id: str, context_id: str, body: models.Update, request: Request):
@@ -81,24 +96,24 @@ def create_router(workspace_endpoint):
     @router.get('/projects/{project_id}/contexts/{context_id}/markdown')
     def markdown(project_id: str, context_id: str, request: Request):
         item, doc = get_context(request, project_id, context_id)
-        return Response(content=doc['content'], media_type='text/markdown',
+        return Response(content=markdown_content(request, item, doc), media_type='text/markdown',
                         headers={'Content-Disposition': f'attachment; filename="{doc["filename"]}"'})
 
     @router.get('/projects/{project_id}/contexts/{context_id}/sections')
     def context_sections(project_id: str, context_id: str, request: Request):
         item, doc = get_context(request, project_id, context_id)
-        return {'id': doc['id'], 'version': doc['version'], 'sections': sections(doc['content'])}
+        return {**s.status(item, doc), 'sections': sections(markdown_content(request, item, doc))}
 
     @router.post('/projects/{project_id}/contexts/{context_id}/extract')
     def extract(project_id: str, context_id: str, body: models.Extract, request: Request):
         item, doc = get_context(request, project_id, context_id)
-        parts = sections(doc['content'])
+        parts = sections(markdown_content(request, item, doc))
         if set(body.section_keys) - {part['key'] for part in parts}:
             raise Problem('Unknown section key; read the sections endpoint first.', 422)
         selected = [part for part in parts if (not body.section_keys or part['key'] in body.section_keys)
                     and (not body.query or body.query.casefold() in part['body'].casefold())]
         text = '\n\n'.join(f"## {part['heading']}\n\n{part['body']}" for part in selected)
-        return {'id': doc['id'], 'version': doc['version'], 'content': text[:body.max_chars], 'truncated': len(text) > body.max_chars}
+        return {**s.status(item, doc), 'content': text[:body.max_chars], 'truncated': len(text) > body.max_chars}
 
     @router.get('/projects/{project_id}/contexts/{context_id}/status')
     def status(project_id: str, context_id: str, request: Request, known_version: int | None = Query(default=None, ge=1)):
@@ -116,7 +131,7 @@ def create_router(workspace_endpoint):
         found = next((entry for entry in doc['history'] if entry['version'] == version), None)
         if found is None:
             raise Problem('Version not found.', 404)
-        return {**found, 'name': s.context_name(found)}
+        return {**found, 'name': s.context_name(found), 'content': markdown_content(request, item, found)}
 
     @router.get('/projects/{project_id}/graph')
     def graph(project_id: str, request: Request):
@@ -128,7 +143,7 @@ def create_router(workspace_endpoint):
         nodes = s.graph(item)['nodes']
         affected = {context_id}
         while True:
-            expanded = affected | {node['id'] for node in nodes if any(link['kind'] == 'depends_on' and link['target_id'] in affected for link in node['relationships'])}
+            expanded = affected | {node['id'] for node in nodes if any(link['target_id'] in affected for link in node['relationships'])}
             if expanded == affected:
                 break
             affected = expanded
@@ -149,7 +164,9 @@ def create_router(workspace_endpoint):
             raise Problem('Proposal not found or unavailable.', 404)
         old = item['contexts'].get(found['context_id'])
         before = next((version for version in old['history'] if version['version'] == found['base_version']), None) if old else None
-        return {**found, 'before': before}
+        content = request.app.state.markdown_storage.proposal(item['id'], found)
+        return {**found, 'candidate': {**found['candidate'], 'content': content},
+                'before': {**before, 'content': markdown_content(request, item, before)} if before else None}
 
     @router.post('/projects/{project_id}/proposals/{proposal_id}/review')
     def review(project_id: str, proposal_id: str, body: models.Review, request: Request):

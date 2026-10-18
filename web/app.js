@@ -34,6 +34,20 @@ let busy = false;
 let demoPositions = {}, demoCompleted = {};
 let demoCatalog = [], demoRole = 'all', demoCategory = 'All cases', demoSelected = 'handoff', demoReports = {}, demoRunning = null;
 let identityConfig, protectedVersion = 0;
+let contextProjects=[], activeProjectId=sessionStorage.getItem('contextos-project'), projectRequest=0;
+
+function updateProjectMenu(list, selected=activeProjectId) {
+  contextProjects=list;
+  const project=list.find(item=>item.id===selected)||list.find(item=>!item.archived)||list[0];
+  activeProjectId=project?.id||null;
+  const select=$('#workspace-project-select');
+  select.innerHTML=list.length?list.map(item=>'<option value="'+esc(item.id)+'" '+(item.id===activeProjectId?'selected':'')+'>'+esc(item.name)+(item.archived?' (archived)':'')+'</option>').join(''):'<option value="">No projects yet</option>';
+  select.disabled=!list.length;
+  $('#project-initial').textContent=(project?.name||'P').charAt(0).toUpperCase();
+  $('#workspace-project-type').textContent=project?.project_type||'Shared knowledge';
+  if(activeProjectId)sessionStorage.setItem('contextos-project',activeProjectId);
+  else sessionStorage.removeItem('contextos-project');
+}
 
 async function api(path, body) {
   const response = await fetch(`/api/${path}`, {method:body === undefined ? 'GET' : 'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-ContextOS-Client':'workspace'}, ...(body === undefined ? {} : {body:JSON.stringify(body)})});
@@ -53,16 +67,22 @@ function toast(message, error = false) {
 }
 async function refresh() {
   const version = protectedVersion;
-  const next = await api('workspace');
-  if (version !== protectedVersion) return;
-  state = next;
+  const current=++projectRequest, next=await api('workspace');
+  if(current!==projectRequest || version!==protectedVersion)return;
+  state=next;
   if (state.auth_mode === 'demo' && !demoCatalog.length) demoCatalog = (await api('demo/scenarios')).scenarios;
-  if (version !== protectedVersion) return;
+  if(current!==projectRequest || version!==protectedVersion)return;
+  if(state.context_pages_enabled){
+    if(state.auth_mode==='demo')await api('context/projects/samples',{});
+    if(current!==projectRequest || version!==protectedVersion)return;
+    const projects=await api('context/projects?include_archived=true');
+    if(current!==projectRequest || version!==protectedVersion)return;
+    updateProjectMenu(projects);
+  }
   document.body.classList.remove('signed-out');
   $('#sign-out').hidden = state.auth_mode !== 'firebase';
   $('#persona').hidden = state.auth_mode !== 'demo';
   document.querySelector('.persona-label').hidden = state.auth_mode !== 'demo';
-  $('#project-name').textContent = state.project.name;
   $('#persona').value = state.role; $('#persona').disabled = state.auth_mode !== 'demo';
   $('#profile-initial').textContent = roleNames[state.role][0];
   $('#profile-label').innerHTML = `${roleNames[state.role]}<small>${state.auth_mode === 'demo' ? 'Demo persona' : 'Verified member'}</small>`;
@@ -112,7 +132,7 @@ function render() {
   $('#mobile-tools').innerHTML = tools;
   $('#crumb').textContent = viewLabel(currentView);
   $('#main').innerHTML = ({overview, work, knowledge, inbox, insights, demo})[currentView]();
-  if (currentView === 'knowledge' && state.context_pages_enabled) window.contextPages.mount($('#context-pages'), async () => {toast('Proposal created. Open project proposals for independent review.');}, message => showSignIn(message));
+  if (currentView === 'knowledge' && state.context_pages_enabled) window.contextPages.mount($('#context-pages'), async () => {toast('Proposal created. Open project proposals for independent review.');}, message => showSignIn(message), activeProjectId, updateProjectMenu);
   else if (currentView === 'knowledge') $('#search').value = queryFilter;
 }
 function canReview(proposal) {
@@ -173,7 +193,7 @@ function updateKnowledgeResults() {
   $('#knowledge-count').textContent = `${list.length} context items`;
 }
 function knowledge() {
-  if (state.context_pages_enabled) return '<div class="cp-page-heading"><h1>Shared knowledge</h1><p>Explore the map. Open a context to focus on its content.</p></div>' + '<div id="context-pages"><div class="loading">Loading shared knowledge…</div></div>';
+  if (state.context_pages_enabled) return '<div class="cp-page-heading"><h1>Shared knowledge</h1><p>Read a context and explore its relationships in the map below.</p></div>' + '<div id="context-pages"><div class="loading">Loading shared knowledge…</div></div>';
   const list = filteredKnowledge();
   return heading('SHARED KNOWLEDGE','Find a decision.','Open a topic to inspect or propose a change.',btn(`${icon('plus')} Add knowledge`,'ingest',true))+
   `<div class="toolbar"><div class="search"><input id="search" type="search" placeholder="Search decisions, requirements, or source IDs…" aria-label="Search shared knowledge"></div><select id="domain-filter" aria-label="Filter by domain">${['All domains',...Object.keys(owners)].map(d => `<option ${d === domainFilter ? 'selected' : ''}>${d}</option>`).join('')}</select><span class="muted" id="knowledge-count" aria-live="polite">${list.length} context items</span></div><div id="knowledge-results">${knowledgeResults(list)}</div>`;
@@ -313,6 +333,8 @@ function addKnowledge() {
 }
 function clearProtectedView() {
   protectedVersion++;
+  projectRequest++;
+  updateProjectMenu([],null);
   window.contextPages.clear();
   state = undefined; activeRun = undefined; selectedContext = undefined;
   queryFilter = ''; domainFilter = 'All domains'; inboxFilter = 'pending';
@@ -323,7 +345,7 @@ function clearProtectedView() {
   $('#main').replaceChildren(); $('#nav').replaceChildren();
   $('#secondary-nav').replaceChildren();
   $('#mobile-tools').replaceChildren(); $('#workspace-tools').open = false;
-  $('#project-name').textContent = ''; $('#profile-label').textContent = '';
+  $('#profile-label').textContent = '';
   $('#sign-out').hidden = true;
 }
 function showSignIn(message='') {
@@ -458,7 +480,12 @@ document.addEventListener('input', e => {
 document.addEventListener('compositionend', e => {
   if (e.target.id === 'search') {queryFilter = e.target.value; updateKnowledgeResults();}
 });
-document.addEventListener('change',e => {if (e.target.id === 'demo-category') {demoCategory = e.target.value; render();} if (e.target.id === 'domain-filter') {domainFilter = e.target.value; updateKnowledgeResults();} if (e.target.id === 'task-budget') sessionStorage.setItem('task-budget',e.target.value);});
+document.addEventListener('change',e => {
+  if(e.target.id==='workspace-project-select'){updateProjectMenu(contextProjects,e.target.value);go('knowledge');}
+  if(e.target.id === 'demo-category') {demoCategory = e.target.value; render();}
+  if(e.target.id === 'domain-filter') {domainFilter = e.target.value; updateKnowledgeResults();}
+  if(e.target.id === 'task-budget') sessionStorage.setItem('task-budget',e.target.value);
+});
 $('#dialog').addEventListener('click', e => {
   const dialog = $('#dialog');
   if (e.target !== dialog || busy) return;

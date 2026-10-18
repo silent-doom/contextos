@@ -4,7 +4,9 @@
   else scope.contextMap = factory();
 })(typeof window === 'undefined' ? globalThis : window, () => {
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-  const cardWidth = 224, cardHeight = 92, columnStep = 336, rowStep = 124;
+  const cardWidth = 224, cardHeight = 118, columnStep = 336, rowStep = 150;
+  // Scale with the graph when zoomed out; cap arrowheads at 8 screen pixels.
+  const arrowSize = zoom => 8 / Math.max(1, zoom);
 
   function layout(documents, relationships) {
     const documentsById = new Map(documents.map(item => [item.id, item]));
@@ -82,7 +84,7 @@
     const selected = map.nodes.find(node => node.id === selectedId);
     const dependencies = new Set(map.edges.filter(edge => edge.source_id === selectedId).map(edge => edge.target_id));
     const consumers = new Set(map.edges.filter(edge => edge.target_id === selectedId).map(edge => edge.source_id));
-    const markers = ['normal', 'dependency', 'consumer'].map(kind => `<marker id="cp-arrow-${kind}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z"/></marker>`).join('');
+    const markers = ['normal', 'dependency', 'consumer'].map(kind => `<marker id="cp-arrow-${kind}" data-map-arrow markerUnits="userSpaceOnUse" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="${arrowSize(zoom)}" markerHeight="${arrowSize(zoom)}" orient="auto"><path d="M 1 1 L 9 5 L 1 9 z"/></marker>`).join('');
     const priority = edge => edge.source_id === selectedId ? 2 : edge.target_id === selectedId ? 1 : 0;
     const links = [...map.edges].sort((a, b) => priority(a) - priority(b)).map(edge => {
       const kind = edge.source_id === selectedId ? 'dependency' : edge.target_id === selectedId ? 'consumer' : 'normal';
@@ -90,7 +92,9 @@
     }).join('');
     const cards = map.nodes.map(node => {
       const kind = node.id === selectedId ? 'selected' : dependencies.has(node.id) ? 'dependency' : consumers.has(node.id) ? 'consumer' : 'other';
-      return `<g class="cp-node cp-node-${kind}" role="button" tabindex="0" aria-pressed="${node.id === selectedId}" aria-controls="context-detail" aria-label="Open ${escape(node.title)}, ${escape(node.domain)}, version ${node.revision}" data-cp-action="select" data-cp-map-node data-id="${escape(node.id)}" data-map-x="${node.x}" data-map-y="${node.y}"><title>${escape(node.title)}</title><rect x="${node.x}" y="${node.y}" width="${cardWidth}" height="${cardHeight}" rx="7"/>${titleLines(node.title).map((line, index) => `<text class="cp-node-title" x="${node.x + 14}" y="${node.y + 27 + index * 18}">${escape(line)}</text>`).join('')}<text class="cp-node-domain" x="${node.x + 14}" y="${node.y + 74}">${escape(node.domain)}</text><text class="cp-node-version" text-anchor="end" x="${node.x + cardWidth - 14}" y="${node.y + 74}">v${node.revision}</text></g>`;
+      const review = node.requires_review || node.status === 'stale';
+      const label = node.status_label || (review ? 'Requires review' : 'Up to date');
+      return `<g class="cp-node cp-node-${kind}" role="button" tabindex="0" aria-pressed="${node.id === selectedId}" aria-controls="context-detail" aria-label="Open ${escape(node.title)}, ${escape(node.domain)}, version ${node.revision}, ${escape(label)}" data-cp-action="select" data-cp-map-node data-id="${escape(node.id)}" data-map-x="${node.x}" data-map-y="${node.y}"><title>${escape(node.title)} · ${escape(label)}</title><rect class="cp-node-body" x="${node.x}" y="${node.y}" width="${cardWidth}" height="${cardHeight}" rx="7"/>${titleLines(node.title).map((line, index) => `<text class="cp-node-title" x="${node.x + 14}" y="${node.y + 27 + index * 18}">${escape(line)}</text>`).join('')}<g class="cp-node-freshness ${review ? 'cp-freshness-review' : 'cp-freshness-current'}"><rect x="${node.x + 14}" y="${node.y + 59}" width="${review ? 113 : 84}" height="19" rx="5"/><text x="${node.x + 22}" y="${node.y + 72}">${escape(label)}</text></g><text class="cp-node-domain" x="${node.x + 14}" y="${node.y + 100}">${escape(node.domain)}</text><text class="cp-node-version" text-anchor="end" x="${node.x + cardWidth - 14}" y="${node.y + 100}">v${node.revision}</text></g>`;
     }).join('');
     const columnLabels = [...new Set(map.nodes.map(node => node.rank))].map(rank => `<text class="cp-map-column" x="${28 + rank * columnStep}" y="87">${rank ? `DEPENDENCY LEVEL ${rank}` : 'FOUNDATIONS'}</text>`).join('');
     return `<section class="panel cp-graph" data-context-map><div class="cp-map-title"><h2>Context map</h2><span>${map.nodes.length} pages · ${map.edges.length} links</span></div><div class="cp-map-header"><p>Page → dependency. Select a card to read its context.</p><div class="cp-map-controls" role="group" aria-label="Map controls"><button type="button" class="btn small" data-cp-action="map-zoom-out" aria-label="Zoom out" ${zoom <= MIN_ZOOM ? 'disabled' : ''}>−</button><output data-cp-zoom aria-label="Map zoom" aria-live="polite">${Math.round(zoom * 100)}%</output><button type="button" class="btn small" data-cp-action="map-zoom-in" aria-label="Zoom in" ${zoom >= MAX_ZOOM ? 'disabled' : ''}>+</button><button type="button" class="btn small" data-cp-action="map-reset" aria-label="Reset map to 100%">Reset</button><button type="button" class="btn small" data-cp-action="map-fit">Fit map</button></div></div><div class="cp-map-viewport" tabindex="0" role="region" aria-label="Interactive context map" aria-describedby="cp-map-help"><svg width="100%" height="100%" data-map-width="${map.width}" data-map-height="${map.height}" role="group" aria-label="Context dependency graph"><defs>${markers}</defs><g data-map-scene>${columnLabels}${links}${cards}</g></svg></div><div class="cp-map-footer"><p class="cp-map-selection" aria-live="polite">${selected ? `Selected: ${escape(selected.title)}` : 'Choose a context page'}</p><div class="cp-map-legend"><span class="cp-legend-selected">Selected</span><span class="cp-legend-dependency">Depends on</span><span class="cp-legend-consumer">Used by</span></div><p class="cp-map-hint" id="cp-map-help">Drag to pan · Wheel or pinch to zoom · + / − zoom · 0 reset · F fit · Arrow keys move between cards</p></div></section>`;
@@ -104,6 +108,7 @@
     const viewport = root.querySelector('.cp-map-viewport');
     if (!viewport) return null;
     const svg = viewport.querySelector('svg'), scene = svg.querySelector('[data-map-scene]');
+    const arrows = svg.querySelectorAll('[data-map-arrow]');
     const world = {width: Number(svg.dataset.mapWidth), height: Number(svg.dataset.mapHeight)};
     let view = initialView ? {...initialView} : {x: 0, y: 0, zoom: 1, fitted: true};
     let size = {width: viewport.clientWidth, height: viewport.clientHeight};
@@ -115,6 +120,10 @@
     };
     function update() {
       scene.setAttribute('transform', 'translate('+view.x+' '+view.y+') scale('+view.zoom+')');
+      for (const marker of arrows) {
+        marker.setAttribute('markerWidth', arrowSize(view.zoom));
+        marker.setAttribute('markerHeight', arrowSize(view.zoom));
+      }
       const output=root.querySelector('[data-cp-zoom]'), label=Math.round(view.zoom*100)+'%';
       if(output.textContent!==label)output.textContent=label;
       root.querySelector('[data-cp-action="map-zoom-out"]').disabled = view.zoom <= MIN_ZOOM;
