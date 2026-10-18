@@ -29,7 +29,7 @@ The public walkthrough is explicitly synthetic and runs AI_MODE=offline. It supp
 - Firestore verification workspace verification-27439140267d450095f5b928b80b901a: concurrent approval has one winner; recreated/second clients see v2; original snapshot stays v1 and stale.
 - Deployed browser-style collaboration workspace cloud-verification-ddf44f6c9866: two real sessions, denied author approval, independent publication, live AI task, v2 publication, stale original manifest, fresh v2 rerun, returning-session persistence and logout pass. Test now sends the actual browser Origin header. Temporary verification users deleted.
 - Retained synthetic accepted topic CTX-3a1c270405, initial run RUN-9ce893304d and refreshed run RUN-60899522f3 are diagnostic evidence, not real customer data.
-- Judge member: live password sign-in/session exchange, six visible accepted topics, denied role switching and logout/401 pass.
+- Judge member: live password sign-in/session exchange, six visible accepted topics, live structured note extraction into a pending proposal, denied role switching and logout/401 pass.
 - Local regression suite: 105 Python and 36 JavaScript tests pass. Two existing upstream deprecation warnings remain.
 
 ## HTTPS proxy correction

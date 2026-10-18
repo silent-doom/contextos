@@ -37,3 +37,7 @@ The following are from supplied portal notes, not freshly verified in the authen
 - [ ] Final rules, availability, source links and claims checked
 
 Never present estimated context reduction as measured total token/cost savings. Collect live usage and task-quality evidence before making impact claims.
+
+## 18 October delivery evidence
+
+Team is Three-Way Handshake: Faizan Choudhary, Amogh Prabhu and Ankush Bhagat. Cloud Run team service, live Vertex generation and deployed two-user workflow with Firestore are verified; independent judge member access also passes. Public synthetic walkthrough is separate and explicitly offline. Template-based landscape pitch is in deliverables/pitch (14 slides, PDF under 5 MB). Voila recording recipe and filled URL prompt are in deliverables/demo. Public video-host upload and final portal checks remain owner submission steps; eligibility/deadline details above are not silently treated as newly authenticated portal evidence.
