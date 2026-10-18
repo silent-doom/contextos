@@ -69,3 +69,6 @@ Login presentation: user-facing copy must use ContextOS product terminology and 
 ## MVP delivery refinement — 18 October
 
 Production-ready refers to interface design and presentation, not an enterprise readiness claim. Deliver the verified Cloud Run MVP, a public synthetic walkthrough with AI disabled, a narrated Voila MP4 with opening/closing title slides and per-beat captions, and a professional landscape PPTX plus PDF covering problem, workflow, differentiation, architecture, evidence, SWOT and roadmap. Save sources and outputs under deliverables/; no credentials in media or Git.
+
+- Local Knowledge reads must discover saved project metadata without session-based seeding; absent metadata must not manufacture owners or approval state. Cloud project metadata/content must remain in scoped Firestore transactions without filesystem fallback.
+- Assess product/story impact before regenerating submission media. Keep accurate existing walkthrough/deck content; opening/closing cards must clearly distinguish synthetic exploration and the live team workspace.
