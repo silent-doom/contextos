@@ -6,7 +6,8 @@ ContextOS is a shared, governed memory workspace for software teams and their AI
 
 > **Status:** Working local hackathon prototype. Offline rehearsal is the default. Live Gemini, Firebase, Firestore, and Google Cloud deployment require separate verification. This repository does not claim production readiness or measured productivity savings.
 
-![ContextOS workspace](artifacts/contextos-actions.jpg)
+<img width="1728" height="1000" alt="image" src="https://github.com/user-attachments/assets/bb971d96-c3f8-4f65-a489-aa39d41b91df" />
+
 
 ## Why ContextOS?
 
