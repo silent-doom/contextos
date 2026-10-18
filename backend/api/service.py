@@ -32,7 +32,7 @@ def context(item, context_id, include_deleted=False):
 
 
 def metadata(item):
-    return {key: value for key, value in item.items() if key not in ('contexts', 'proposals', 'events')}
+    return {key: value for key, value in item.items() if key not in ('contexts', 'proposals', 'events', '_access_scope')}
 
 
 def log(item, actor, action, target):
@@ -41,8 +41,8 @@ def log(item, actor, action, target):
 
 def create_project(state, actor, data):
     records = state.setdefault('context_projects', {})
-    if len(records) >= 10:
-        raise Problem('Prototype limit: 10 projects per workspace.', 409)
+    if sum(not item.get('metadata_missing') for item in records.values()) >= 10:
+        raise Problem('Prototype limit: 10 registered projects.', 409)
     item = {'id': uid('PRJ'), **data, 'admin': actor, 'version': 1, 'archived': False,
             'created_at': now(), 'updated_at': now(), 'contexts': {}, 'proposals': {}, 'events': []}
     records[item['id']] = item
@@ -51,6 +51,8 @@ def create_project(state, actor, data):
 
 
 def update_project(item, actor, data):
+    if item.get('metadata_missing'):
+        raise Problem('Restore this project\'s missing metadata before making changes.', 409)
     if actor != item['admin']:
         raise Problem('Only the project admin can edit or archive this project.', 403)
     if data.pop('expected_version') != item['version']:
@@ -129,6 +131,8 @@ def proposal_hash(proposal):
 
 
 def propose(item, actor, action, data, context_id=None):
+    if item.get('metadata_missing'):
+        raise Problem('Restore this project\'s missing metadata before making changes.', 409)
     if item['archived']:
         raise Problem('Restore this archived project before proposing changes.', 409)
     if sum(p['status'] == 'pending' for p in item['proposals'].values()) >= 50:

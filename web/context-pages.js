@@ -86,6 +86,7 @@ window.contextPages = (() => {
   }
   function pageView() {
     const doc=historical||page;
+    if(project.project.metadata_missing)return panel('Project metadata is missing','<p class="note amber">'+escape(project.project.description)+'</p><p class="muted">'+project.project.stored_markdown_files+' Markdown files are preserved in this project folder. Their prior approval state cannot be determined from Markdown alone.</p>');
     if(!doc)return '<section class="panel cp-selection-empty"><h2>'+(project.contexts.length?'Select a context':'No published content yet')+'</h2><p>'+(project.contexts.length?'Choose a context from the map below or the list to read its content here.':'Propose a context and have it approved to read it here.')+'</p></section>';
     return '<article class="panel cp-reader"><header class="cp-reader-header"><p class="cp-kicker">'+(historical?'Historical context · version '+doc.version:'Context')+'</p><div class="cp-reader-identity"><h2 id="context-reader-title" tabindex="-1">'+escape(contextName(doc))+'</h2>'+(historical?'':badge(status.status))+'</div><div class="cp-reader-tabs" role="group" aria-label="Content format">'+
       button('Read','read','aria-pressed="'+!showSource+'"')+button('Markdown','source','aria-pressed="'+showSource+'"')+'</div></header>'+
@@ -113,7 +114,7 @@ window.contextPages = (() => {
   }
   function projectMetadata() {
     const item=project.project;
-    return '<section class="cp-side-section"><h3>Project details</h3><p class="cp-project-description">'+escape(item.description||'No project description yet.')+'</p><dl class="cp-metadata"><div><dt>Type</dt><dd>'+escape(item.project_type)+'</dd></div><div><dt>Admin</dt><dd>'+escape(item.admin)+'</dd></div><div><dt>Created</dt><dd>'+escape(dateLabel(item.created_at))+'</dd></div></dl>'+ (item.archived?badge('archived'):'')+button('Edit project details','project-details')+'</section>';
+    return '<section class="cp-side-section"><h3>Project details</h3><p class="cp-project-description">'+escape(item.description||'No project description yet.')+'</p><dl class="cp-metadata"><div><dt>Type</dt><dd>'+escape(item.project_type)+'</dd></div><div><dt>Admin</dt><dd>'+escape(item.admin)+'</dd></div><div><dt>Created</dt><dd>'+escape(dateLabel(item.created_at))+'</dd></div></dl>'+ (item.archived?badge('archived'):'')+(item.metadata_missing?'':button('Edit project details','project-details'))+'</section>';
   }
   function contextCatalog(collapsed) {
     const content='<form id="context-search-form" class="cp-side-form"><label class="field">Find context<input name="query" type="search" placeholder="Search contexts…" maxlength="500"></label><button class="btn small" type="submit">Search</button></form><div class="cp-context-list" id="context-page-list">'+pageList(project.contexts)+'</div>';
@@ -122,9 +123,10 @@ window.contextPages = (() => {
   function inspector() {
     const reading=page&&['map','page','version','context-edit','delete'].includes(mode);
     return '<aside class="panel cp-inspector" aria-label="'+(reading?'Context metadata':'Project metadata')+'">'+(reading?contextMetadata():projectMetadata())+
-      '<section class="cp-side-section cp-side-actions"><h3>Manage knowledge</h3>'+(!project.project.archived?button('New context','new','',!reading):'')+button('Proposals ('+proposals.filter(item=>item.status==='pending').length+')','reviews')+button('New project','project-new')+'</section>'+contextCatalog(!!reading)+'</aside>';
+      '<section class="cp-side-section cp-side-actions"><h3>Manage knowledge</h3>'+(!project.project.archived&&!project.project.metadata_missing?button('New context','new','',!reading):'')+button('Proposals ('+proposals.filter(item=>item.status==='pending').length+')','reviews')+button('New project','project-new')+'</section>'+contextCatalog(!!reading)+'</aside>';
   }
   function mapViewMarkup() {
+    if(project.project.metadata_missing)return '';
     if(!project.contexts.length)return '<section class="panel cp-empty-map"><div class="cp-empty-symbol" aria-hidden="true">◇</div><h2>Your knowledge map starts here</h2><p>Propose a context, then connect it to other approved knowledge.</p>'+(!project.project.archived?button('New context','new','',true):'')+'</section>';
     return '<div class="cp-canvas">'+window.contextMap.render(project.contexts.map(item=>({...item,title:contextName(item),domain:roleLabel(item.owner_type),revision:item.version})),project.relationships,page?.id,mapView?.zoom??1)+'</div>';
   }

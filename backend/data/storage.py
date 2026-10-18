@@ -1,6 +1,6 @@
 """Temporary local Markdown storage. Replace this adapter with Firestore.
 
-Project metadata and review hashes stay in the existing transactional store.
+Local project metadata and review hashes are saved in storage/projects.json.
 Only authorized records supplied by the API are written or read here.
 """
 import hashlib
@@ -24,7 +24,10 @@ class MarkdownStorage:
     def project_path(self, project_id):
         if not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', project_id):
             raise Problem('Invalid storage project ID.', 422)
-        return self.root / 'projects' / project_id
+        path = self.root / 'projects' / project_id
+        if not path.resolve().is_relative_to(self.root):
+            raise Problem('Invalid storage path.', 422)
+        return path
 
     def _file(self, project_id, kind, record_id, filename):
         if not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', record_id):
@@ -34,11 +37,13 @@ class MarkdownStorage:
             raise Problem('Invalid storage path.', 422)
         return path
 
-    def _content(self, path, expected):
+    def _content(self, path, expected, create=False):
         """Create missing files atomically; never overwrite approved/reviewed content."""
         try:
             with self.lock:
                 if not path.exists():
+                    if not create:
+                        raise Problem('Saved Markdown is missing. Restore its file before continuing.', 409)
                     path.parent.mkdir(parents=True, exist_ok=True)
                     temporary = path.with_name('.' + uuid4().hex + '.tmp')
                     try:
@@ -55,23 +60,23 @@ class MarkdownStorage:
         except UnicodeError as exc:
             raise Problem('Stored Markdown is not valid UTF-8.', 409) from exc
 
-    def revision(self, project_id, doc):
+    def revision(self, project_id, doc, *, create=False):
         version = doc['version']
         if not isinstance(version, int) or version < 1:
             raise Problem('Invalid Markdown version.', 422)
         digest = hashlib.sha256(doc['content'].encode()).hexdigest()[:32]
         path = self._file(project_id, 'contexts', doc['id'], f'versions/v{version:06d}-{digest}.md')
-        return self._content(path, doc['content'])
+        return self._content(path, doc['content'], create)
 
-    def proposal(self, project_id, proposal):
+    def proposal(self, project_id, proposal, *, create=False):
         path = self._file(project_id, 'proposals', proposal['id'], 'candidate.md')
-        return self._content(path, proposal['candidate']['content'])
+        return self._content(path, proposal['candidate']['content'], create)
 
     def sync(self, state):
         """Write files before the metadata transaction commits; retries are idempotent."""
         for project in state.get('context_projects', {}).values():
             for doc in project['contexts'].values():
                 for revision in doc['history']:
-                    self.revision(project['id'], revision)
+                    self.revision(project['id'], revision, create=True)
             for proposal in project['proposals'].values():
-                self.proposal(project['id'], proposal)
+                self.proposal(project['id'], proposal, create=True)

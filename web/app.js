@@ -73,7 +73,6 @@ async function refresh() {
   if (state.auth_mode === 'demo' && !demoCatalog.length) demoCatalog = (await api('demo/scenarios')).scenarios;
   if(current!==projectRequest || version!==protectedVersion)return;
   if(state.context_pages_enabled){
-    if(state.auth_mode==='demo')await api('context/projects/samples',{});
     if(current!==projectRequest || version!==protectedVersion)return;
     const projects=await api('context/projects?include_archived=true');
     if(current!==projectRequest || version!==protectedVersion)return;

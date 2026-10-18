@@ -65,7 +65,7 @@ class RoleInput(Input):
     role: Literal['pm', 'architect', 'developer', 'qa', 'security']
 
 
-def create_app(store=None, ai=None):
+def create_app(store=None, ai=None, markdown_storage=None, project_store=None):
     public_origin = os.getenv('PUBLIC_ORIGIN', '').rstrip('/')
     if public_origin:
         parsed = urlsplit(public_origin)
@@ -77,6 +77,8 @@ def create_app(store=None, ai=None):
     app.state.ai = ai or AI()
     from backend.data.storage import MarkdownStorage
     app.state.markdown_storage = markdown_storage or MarkdownStorage(ROOT / 'storage')
+    from backend.data.projects import make_project_store
+    app.state.project_store = project_store or make_project_store(app.state.store, app.state.markdown_storage)
     app.state.conversations = ConversationService(app.state.store, app.state.ai)
     auth_mode = os.getenv('AUTH_MODE', 'demo')
     if auth_mode not in ('demo', 'firebase'):

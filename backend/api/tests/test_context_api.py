@@ -36,6 +36,8 @@ class MemoryStore:
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     monkeypatch.setenv('AUTH_MODE', 'demo')
+    monkeypatch.setenv('STORE_BACKEND', 'sqlite')
+    monkeypatch.delenv('K_SERVICE', raising=False)
     with TestClient(create_app(store=MemoryStore(), ai=AI(mode='offline'), markdown_storage=MarkdownStorage(tmp_path / 'storage')), headers={'X-ContextOS-Client': 'workspace'}) as client:
         yield client
 
@@ -314,7 +316,7 @@ def test_reference_cycles_terminate_and_missing_baselines_require_review(client)
     approve(client, project, change)
     assert not client.get(base(project) + '/contexts/' + first['id'] + '/status').json()['requires_review']
     assert client.get(base(project) + '/contexts/' + second['id'] + '/status').json()['requires_review']
-    item = next(iter(client.app.state.store.states.values()))['context_projects'][project['id']]
+    item = client.app.state.project_store.read()['context_projects'][project['id']]
     doc = deepcopy(item['contexts'][second['id']])
     doc['relationship_versions'] = {}
     result = s.status(item, doc)
@@ -374,6 +376,7 @@ def test_workspace_isolation_and_firebase_trusted_identity(monkeypatch, tmp_path
     import firebase_admin
     from firebase_admin import auth
     monkeypatch.setenv('AUTH_MODE', 'firebase')
+    monkeypatch.setenv('STORE_BACKEND', 'firestore')
     monkeypatch.setattr(firebase_admin, '_apps', {'test': object()})
     def verify(token, check_revoked):
         assert check_revoked
@@ -395,6 +398,12 @@ def test_workspace_isolation_and_firebase_trusted_identity(monkeypatch, tmp_path
         assert client.post(base(project) + '/proposals/' + proposal['id'] + '/review', json={'hash': proposal['hash'], 'decision': 'approve'}).status_code == 404
         client.headers['Authorization'] = 'Bearer reviewer'
         assert client.post(base(project) + '/proposals/' + proposal['id'] + '/review', json={'hash': proposal['hash'], 'decision': 'approve'}).status_code == 200
+        path = base(project) + '/contexts/' + proposal['context_id']
+        assert client.get(path).json()['content'] == proposal['candidate']['content']
+        assert client.get(path + '/markdown').text == proposal['candidate']['content']
+        assert client.get(path + '/versions/1').json()['content'] == proposal['candidate']['content']
+        assert client.get(base(project) + '/proposals/' + proposal['id']).json()['candidate']['content'] == proposal['candidate']['content']
+        assert not (tmp_path / 'storage').exists(), 'Production project reads/writes must never use local storage.'
 
 
 def test_markdown_files_are_saved_for_proposals_and_approved_versions(client):
@@ -432,28 +441,56 @@ def test_storage_failure_does_not_commit_a_proposal(client, monkeypatch):
     assert client.get(base(project) + '/proposals').json() == []
 
 
-def test_two_sample_projects_are_idempotent_and_workspace_isolated(client):
-    first = client.post('/api/context/projects/samples', json={})
-    assert first.status_code == 200
-    projects = first.json()
-    assert [item['name'] for item in projects] == ['Checkout Reliability', 'Research Assistant']
-    assert client.post('/api/context/projects/samples', json={}).json() == projects
-    assert len(client.get('/api/context/projects').json()) == 2
-    context_ids = []
-    for project in projects:
-        details = client.get(base(project)).json()
-        assert len(details['contexts']) == 4 and details['relationships']
-        context_ids.extend(doc['id'] for doc in details['contexts'])
-    assert len(set(context_ids)) == 8
+def test_project_reads_and_browser_sessions_do_not_seed_samples(client):
     storage = client.app.state.markdown_storage.root
-    assert len(list(storage.rglob('v*.md'))) == 8
-    client.cookies.clear()
     assert client.get('/api/context/projects').json() == []
-    assert client.get(base(projects[0])).status_code == 404
-    other = client.post('/api/context/projects/samples', json={}).json()
-    assert {item['id'] for item in other}.isdisjoint(item['id'] for item in projects)
-    assert {path.name for path in (storage / 'projects').iterdir()} == {item['id'] for item in projects + other}
+    assert client.post('/api/context/projects/samples', json={}).status_code == 409
+    assert not storage.exists()
+    project = create_project(client)
+    client.cookies.clear()
+    assert client.get('/api/context/projects').json() == [project]
+    assert {path.name for path in (storage / 'projects').iterdir()} == {project['id']}
     assert not (storage / 'workspaces').exists()
+
+
+def test_project_metadata_and_approvals_survive_a_new_application(client):
+    project = create_project(client)
+    doc = publish(client, project, 'design.md', name='Design')
+    storage = client.app.state.markdown_storage
+    assert (storage.root / 'projects.json').is_file()
+    with TestClient(create_app(store=MemoryStore(), ai=AI(mode='offline'), markdown_storage=MarkdownStorage(storage.root)),
+                    headers={'X-ContextOS-Client': 'workspace'}) as restarted:
+        assert restarted.get('/api/context/projects').json()[0]['id'] == project['id']
+        path = base(project) + '/contexts/' + doc['id']
+        assert restarted.get(path).json() == doc
+        assert restarted.get(path + '/versions/1').json()['approved_by'] == 'demo-architect'
+        assert restarted.get(base(project) + '/proposals').json()[0]['status'] == 'approved'
+
+
+def test_existing_folders_are_visible_without_fabricating_metadata(client):
+    storage = client.app.state.markdown_storage.root
+    for number in range(10):
+        folder = storage / 'projects' / f'PRJ-old-{number}'
+        folder.mkdir(parents=True)
+        (folder / 'legacy.md').write_text('Existing Markdown', encoding='utf-8')
+    before = {str(path.relative_to(storage)): path.read_bytes() for path in storage.rglob('*') if path.is_file()}
+    rows = client.get('/api/context/projects').json()
+    assert len(rows) == 10 and all(row['metadata_missing'] for row in rows)
+    assert all(row['admin'] == '' and row['stored_markdown_files'] == 1 for row in rows)
+    assert client.get(base(rows[0])).json()['contexts'] == []
+    assert client.post(base(rows[0]) + '/contexts', json=candidate(client)).status_code == 409
+    client.cookies.clear()
+    assert client.get('/api/context/projects').json() == rows
+    assert {str(path.relative_to(storage)): path.read_bytes() for path in storage.rglob('*') if path.is_file()} == before
+
+
+def test_missing_markdown_reads_do_not_regenerate_files(client):
+    project = create_project(client)
+    doc = publish(client, project)
+    path = next(client.app.state.markdown_storage.root.rglob('v000001-*.md'))
+    path.unlink()
+    assert client.get(base(project) + '/contexts/' + doc['id']).status_code == 409
+    assert not path.exists()
 
 
 def test_real_mcp_stdio_creates_empty_project_and_proposes_context(client):
@@ -492,8 +529,8 @@ def test_real_mcp_stdio_creates_empty_project_and_proposes_context(client):
                     assert (await call('discover_context', {'project_id': project_id}))['total'] == 0
                     # Publish test fixtures with an independent reviewer; agents have no approval tool.
                     from backend.api import service as s
-                    store = client.app.state.store
-                    workspace = next(wid for wid, state in store.states.items() if project_id in s.projects(state))
+                    store = client.app.state.project_store
+                    workspace = 'local'
                     def accept(proposal):
                         store.mutate(workspace, lambda state: s.review(s.project(state, project_id), 'test-reviewer', 'architect',
                             proposal['id'], {'hash': proposal['hash'], 'decision': 'approve'}))

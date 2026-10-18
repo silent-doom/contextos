@@ -7,17 +7,17 @@ def test_version_files_are_immutable_isolated_and_content_addressed(tmp_path):
     storage = MarkdownStorage(tmp_path)
     root = storage.root
     doc = {'id': 'CTX-one', 'version': 1, 'content': 'Approved Markdown\r\nUnicode: café\r\n'}
-    assert storage.revision('PRJ-one', doc) == doc['content']
+    assert storage.revision('PRJ-one', doc, create=True) == doc['content']
     first = next(root.rglob('v*.md'))
     assert first.is_relative_to(root / 'projects' / 'PRJ-one')
     assert not (root / 'workspaces').exists()
-    storage.revision('PRJ-one', doc)
+    storage.revision('PRJ-one', doc, create=True)
     assert len(list(root.rglob('v*.md'))) == 1
     # An uncommitted competing version cannot overwrite another proposal's file.
-    storage.revision('PRJ-one', {**doc, 'content': 'Competing proposal'})
+    storage.revision('PRJ-one', {**doc, 'content': 'Competing proposal'}, create=True)
     assert first.read_bytes().decode('utf-8') == doc['content']
     assert len(list(root.rglob('v*.md'))) == 2
-    storage.revision('PRJ-two', {**doc, 'content': 'Another project'})
+    storage.revision('PRJ-two', {**doc, 'content': 'Another project'}, create=True)
     assert storage.project_path('PRJ-one') != storage.project_path('PRJ-two')
     assert first.read_bytes().decode('utf-8') == doc['content']
     first.write_text('Modified outside approval')

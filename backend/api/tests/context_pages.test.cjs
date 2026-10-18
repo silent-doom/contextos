@@ -169,7 +169,7 @@ test('rapid selection keeps the last selected page when an earlier request finis
   assert.doesNotMatch(root.innerHTML,/<h2[^>]*>Context B<\/h2>/);
 });
 
-function workspaceHarness(documents=['A','B'].map(card)) {
+function workspaceHarness(documents=['A','B'].map(card),projectChanges={}) {
   const handlers={}, requests=[];
   const root={...element(),addEventListener:(name,handler)=>{handlers[name]=handler;}};
   let pending;
@@ -177,7 +177,7 @@ function workspaceHarness(documents=['A','B'].map(card)) {
     requests.push(url);
     if(url.endsWith('/template'))return response({});
     if(url.endsWith('/projects?include_archived=true'))return response([{id:'current'}]);
-    if(url.endsWith('/projects/current'))return response({project:{id:'current',name:'Test project'},contexts:documents,relationships:[link('B','A')]});
+    if(url.endsWith('/projects/current'))return response({project:{id:'current',name:'Test project',...projectChanges},contexts:documents,relationships:[link('B','A')]});
     if(url.endsWith('/proposals'))return response([]);
     if(url.endsWith('/sections'))return response({sections:[]});
     if(url.endsWith('/status'))return response({...documents.find(doc=>url.includes('/contexts/'+doc.id+'/')),pending_proposals:0});
@@ -213,6 +213,17 @@ test('knowledge keeps selected content above the map with supporting metadata',a
   const selected=h.root.innerHTML;
   h.click('map');await h.flush();
   assert.equal(h.root.innerHTML,selected,'Jumping to the map must keep the selected content and source mode');
+});
+
+test('Markdown-only folders are visible with a recovery warning and no editing affordances',async()=>{
+  const h=workspaceHarness([],{metadata_missing:true,stored_markdown_files:8,description:'Restore the saved owners, relationships and approvals.'});
+  await h.mount();
+  assert.match(h.root.innerHTML,/Project metadata is missing/);
+  assert.match(h.root.innerHTML,/8 Markdown files are preserved/);
+  assert.doesNotMatch(h.root.innerHTML,/data-cp-action="new"/);
+  assert.doesNotMatch(h.root.innerHTML,/data-cp-action="project-details"/);
+  assert.match(h.root.innerHTML,/data-cp-action="project-new"/);
+  assert.ok(!h.requests.some(url=>url.includes('/contexts/')));
 });
 
 test('context editing separates the display name from the Markdown filename',async()=>{

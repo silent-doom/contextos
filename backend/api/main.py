@@ -10,18 +10,14 @@ def create_router(workspace_endpoint, demo_mode=False):
 
     def read(request):
         wid, actor, role = request.state.identity_info
-        return request.app.state.store.read(wid)
+        return request.app.state.project_store.read(wid)
 
     def mutate(request, operation):
         wid, actor, role = request.state.identity_info
-        def save(state):
-            result = operation(state, actor, role)
-            request.app.state.markdown_storage.sync(state)
-            return result
-        return request.app.state.store.mutate(wid, save)
+        return request.app.state.project_store.mutate(wid, lambda state: operation(state, actor, role))
 
     def markdown_content(request, item, doc):
-        return request.app.state.markdown_storage.revision(item['id'], doc)
+        return request.app.state.project_store.content(item['id'], doc)
 
     def get_project(request, project_id):
         return s.project(read(request), project_id)
@@ -46,8 +42,7 @@ def create_router(workspace_endpoint, demo_mode=False):
     def sample_projects(request: Request):
         if not demo_mode:
             raise Problem('Sample projects are available only in demo mode.', 403)
-        from backend.api.samples import create_samples
-        return mutate(request, lambda state, actor, role: create_samples(state, actor))
+        raise Problem('Sample project creation is disabled. Create a project explicitly.', 409)
 
     @router.get('/projects/{project_id}')
     def project(project_id: str, request: Request):
@@ -164,7 +159,7 @@ def create_router(workspace_endpoint, demo_mode=False):
             raise Problem('Proposal not found or unavailable.', 404)
         old = item['contexts'].get(found['context_id'])
         before = next((version for version in old['history'] if version['version'] == found['base_version']), None) if old else None
-        content = request.app.state.markdown_storage.proposal(item['id'], found)
+        content = request.app.state.project_store.candidate(item['id'], found)
         return {**found, 'candidate': {**found['candidate'], 'content': content},
                 'before': {**before, 'content': markdown_content(request, item, before)} if before else None}
 
