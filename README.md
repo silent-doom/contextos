@@ -4,7 +4,7 @@
 
 ContextOS is a shared, governed memory workspace for software teams and their AI agents. Keep accepted requirements, architecture decisions, and constraints connected as work moves between Product, Architecture, Development, QA, and Security.
 
-> **Status:** Working local hackathon prototype. Offline rehearsal is the default. Live Gemini, Firebase, Firestore, and Google Cloud deployment require separate verification. This repository does not claim production readiness or measured productivity savings.
+> **Status:** Deployed hackathon MVP with live Gemini on Vertex AI, verified team sessions and Firestore persistence. A separate public walkthrough uses labeled synthetic rehearsal. This is not an enterprise production-readiness claim.
 
 <img width="1728" height="1000" alt="image" src="https://github.com/user-attachments/assets/bb971d96-c3f8-4f65-a489-aa39d41b91df" />
 
@@ -18,6 +18,12 @@ A requirement should survive the handoff from a product conversation to implemen
 - **Change awareness:** Dependency-based stale-run alerts, fresh reruns, and rollback through new revisions.
 - **Inspectable behavior:** Review comparisons, history, attributable audit events, and separate estimates/provider usage.
 - **Interactive demo:** Five personas and twelve step-by-step walkthroughs with Next/Back, captured checkpoints, and a step activity log.
+
+## Hosted MVP
+
+- [Team workspace](https://contextos-443743777956.asia-south1.run.app) — provisioned member sign-in.
+- [Public walkthrough](https://contextos-demo-443743777956.asia-south1.run.app) — synthetic data, live AI disabled.
+- [Deployment evidence and recovery](deployment/verification.md). Judge credentials are shared privately.
 
 ## Quick start
 
@@ -77,9 +83,10 @@ The UI uses royal-blue accents and navigation, an off-white background, and whit
 
 ## Development checks
 
-From the repository root:
+From the repository root (the full Python API/MCP suite needs its pinned test dependency):
 
 ```sh
+.venv/bin/python -m pip install -r backend/mcp/requirements.txt -c requirements.txt
 .venv/bin/pytest -q
 node --check web/app.js
 node --check web/auth.js

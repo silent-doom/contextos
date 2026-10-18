@@ -38,7 +38,8 @@ def request(client, method, path, payload=None, expected=200):
 def sign_in(client, token):
     config = request(client, 'GET', '/api/auth/config')
     client.headers.update({'X-ContextOS-Client': 'workspace',
-                           'X-ContextOS-CSRF': config['csrf_token']})
+                           'X-ContextOS-CSRF': config['csrf_token'],
+                           'Origin': str(client.base_url).rstrip('/')})
     request(client, 'POST', '/api/auth/session', {'id_token': token})
     return request(client, 'GET', '/api/workspace')
 
