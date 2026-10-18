@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import secrets
 from typing import Literal
+from urllib.parse import urlsplit
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -65,6 +66,12 @@ class RoleInput(Input):
 
 
 def create_app(store=None, ai=None):
+    public_origin = os.getenv('PUBLIC_ORIGIN', '').rstrip('/')
+    if public_origin:
+        parsed = urlsplit(public_origin)
+        if (parsed.scheme not in ('http', 'https') or not parsed.hostname or parsed.username
+                or parsed.password or parsed.path or parsed.query or parsed.fragment):
+            raise RuntimeError('PUBLIC_ORIGIN must be an absolute HTTP(S) origin without a path or credentials.')
     app = FastAPI(title='ContextOS', docs_url='/api/docs', redoc_url=None)
     app.state.store = store or make_store()
     app.state.ai = ai or AI()
@@ -103,7 +110,7 @@ def create_app(store=None, ai=None):
             if request.headers.get('x-contextos-client') != 'workspace':
                 return JSONResponse({'detail': 'Missing same-origin client header.'}, status_code=403)
             origin = request.headers.get('origin')
-            if origin and origin.rstrip('/') != str(request.base_url).rstrip('/'):
+            if origin and origin.rstrip('/') != (public_origin or str(request.base_url).rstrip('/')):
                 return JSONResponse({'detail': 'Cross-origin writes are not allowed.'}, status_code=403)
             try:
                 length = int(request.headers.get('content-length', '0'))

@@ -89,3 +89,7 @@ with Overview/Work/Inbox, secondary tools, legacy routes and protected refresh
 cleanup. The controller fixture loads real modules and models location/history.
 Six new integration checks plus the existing map/page suite bring local totals
 to 85 Python + 36 Node. CI includes that suite; hosted verification is pending.
+
+## Live deployment evidence — 18 October
+
+Team sign-in, role/workspace claims, session cookies, Firestore persistence, independent review and live Vertex AI are verified on Cloud Run. A separate synthetic demo is authorized for judge exploration and recording; it does not make live model calls. Product remains a hackathon MVP. Pitch and narrated video are being prepared under deliverables/.

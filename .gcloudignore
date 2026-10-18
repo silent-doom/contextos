@@ -1,0 +1,12 @@
+# Upload only the application inputs required by Dockerfile.
+**
+!Dockerfile
+!requirements.txt
+!backend/
+!backend/**
+!web/
+!web/**
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/api/tests/
+backend/mcp/

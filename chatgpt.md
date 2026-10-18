@@ -139,3 +139,9 @@ User selected project contextos-512006 and account choudhary.faizan2002@gmail.co
 ## CI and cloud follow-up — 18 October
 
 Reviewed latest gemini.md: historical theme suggestions do not override the current integrated team UI; cloud verification remains a real gate. Correct-account Google SDK login succeeded. Both latest main CI runs are green; earlier browser routing failure is fixed upstream and preserved locally. Expanded coverage to include the backend API/MCP suite: 100 Python and 36 Node tests pass, plus hygiene/rehearsal. User authorized full deployment, currently blocked by disabled project billing; asked owner to enable billing. No cloud service exposure or live model verification claimed.
+
+## Live cloud evidence and presentation scope — 18 October
+
+Cloud deployment gate now has real evidence: live Vertex generation, Firestore competing approvals and preserved v1 manifests, plus deployed two-user sessions, independent publication, source staleness/rerun and logout all pass. Existing Gemini theme feedback remains historical; current team UI preserved. Owner clarified MVP scope with polished design. Recording and pitch will label synthetic walkthroughs separately from live verified team functionality.
+
+Cloud browser correction: exact configured PUBLIC_ORIGIN fixes HTTPS termination mismatch while rejecting hostile origins/forwarded-header spoofing. Live verifier now includes Origin and passes after redeployment. Judge member session and scoped synthetic data verified, role switching denied. No Cloud Run error-severity logs found during the deployment check. MVP design scope preserved.
