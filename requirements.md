@@ -49,3 +49,5 @@ Design clarification (15 October): use the palette and typography from 4e1bd51 w
 ## Person 3 workstream — 18 October
 
 See PERSON3_DELIVERY.md for the proposed capability map and measurable acceptance criteria, P3-01 through P3-11. Real sign-in/session/logout, authoritative identity handoff, managed persistence, relationship UI, conversation UX, dedicated activity, readiness, CI promotion, secrets, monitoring and judge access are tracked separately. Preserve current governance/privacy and the selected 4e1bd51 theme. Provider selection is open: recommend Firebase/Firestore/Cloud Run to reuse existing adapters; Supabase Auth/Postgres on Cloud Run is an explicit alternative. No cloud resources are provisioned by this planning task.
+
+Login presentation: user-facing copy must use ContextOS product terminology and actionable recovery messages, without provider names, public API-key instructions or infrastructure setup jargon. Keep exact Firebase/Firestore setup in operator docs and preserve truthful availability states. Selected cloud project is contextos-512006 under choudhary.faizan2002@gmail.com.

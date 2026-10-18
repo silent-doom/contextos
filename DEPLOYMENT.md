@@ -4,6 +4,23 @@
 
 The application runs locally with SQLite and explicit offline rehearsal. Gemini, Firebase, and Firestore adapters exist but require live project configuration and verification. No cloud deployment or live Google AI result is claimed. GitHub is configured at silent-doom/contextos. Selected stack: Firebase Auth + Firestore + Cloud Run.
 
+## Selected target
+
+- Project: `contextos-512006`.
+- Operator account: `choudhary.faizan2002@gmail.com` (selected by owner).
+- CLI sign-in initiated using the normal browser flow. Initial lookup from the other locally active account was denied; correct-account access must be rechecked after authorization completes.
+- No APIs, billing, IAM grants, database, public exposure or deployment changed during this access check.
+
+For an explicit target check after signing in:
+
+```sh
+gcloud projects describe contextos-512006 --account choudhary.faizan2002@gmail.com
+gcloud services list --enabled --project contextos-512006 --account choudhary.faizan2002@gmail.com
+gcloud firestore databases list --project contextos-512006 --account choudhary.faizan2002@gmail.com
+```
+
+Select the database location only after inspecting existing resources; existing Firestore location is not changed casually. Default CLI settings are not a substitute for passing the selected project/account explicitly.
+
 ## Local configuration
 
 Python 3.14 is used for development and the container. Install `requirements.txt`. Configure environment variables explicitly in your shell (the app does not auto-load `.env`). `.env.example` documents options and contains no secrets.

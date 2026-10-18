@@ -66,3 +66,5 @@ Theme restoration verification (15 October): 42 tests pass; JavaScript syntax pa
 Selected-store preparation: five tests cover unknown backend rejection, empty real-account vs seeded demo initialization, data preservation, Cloud Run SQLite refusal, explicit Firestore project requirement and factory initializer. Total: 55 Python + 4 Node tests. Firestore rules/index JSON parse and verifier CLI help checked; actual transaction/emulator/live verification remains open.
 
 Final identity/storage checkpoint: 56 Python tests + 4 Node auth contract tests pass. Added a regression showing that logout clears the browser session even when its audit write fails. Live provider/cloud checks remain pending.
+
+18 October sign-in copy: browser DOM confirms product-only sign-in text, no provider/setup branding. Auth Node contract tests and JavaScript syntax checks pass. Cloud project access attempt using the prior account was denied; selected-account browser authorization is pending. No live sign-in/deployment was verified by that attempt.

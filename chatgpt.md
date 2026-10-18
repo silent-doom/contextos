@@ -90,3 +90,7 @@ Owner selected Firebase Auth + Firestore + Cloud Run. Implemented and tested pro
 Persistence checkpoint: selected Firestore path now validates configuration and initializes new real workspaces without synthetic data. Existing data is preserved. Prepared client-deny rules/index exclusions and separate verification script; no live project credentials or datastore access were used. Five configuration tests added, for 55 Python + 4 Node checks.
 
 Final local verification: 56 Python + 4 Node tests pass, including logout with unavailable audit storage. Latest Gemini audit unchanged; theme/CSP retained, live cloud gate not claimed complete.
+
+## Project and presentation update — 2026-10-18
+
+User selected project contextos-512006 and account choudhary.faizan2002@gmail.com. Initial CLI account could not access the project; correct-account login initiated. Sign-in screen and auth errors now use ContextOS product language, with no provider names or setup internals. Deployment/verification status stays truthful in operator documentation.

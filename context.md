@@ -113,3 +113,7 @@ Replaced the developer token-entry bridge with an email/password sign-in screen,
 ## 2026-10-18 — Selected persistence configuration slice
 
 Added clean authenticated-workspace initialization without synthetic knowledge, preserved existing data, made unknown backend/missing Firestore project settings fail explicitly, and retained the Cloud Run SQLite guard. Added five config/init tests. Prepared Firestore client-deny rules, payload index exclusions and a separate live/emulator verification script; only its CLI help was exercised, no cloud writes occurred. 55 Python + 4 Node tests pass.
+
+## 2026-10-18 — Selected cloud project and professional sign-in copy
+
+Owner selected contextos-512006 and corrected the Google identity to choudhary.faizan2002@gmail.com. Initial lookup using the previously active account returned permission denied. Started the normal gcloud browser authorization for the selected account; user completion is pending. Removed provider branding/setup jargon from rendered sign-in and auth errors, preserving explicit temporary-unavailable/retry states. Technical provider details remain in operator docs.
