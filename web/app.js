@@ -19,13 +19,21 @@ const paths = {
 const icon = (name) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="${paths[name] || paths.knowledge}"/></svg>`;
 const roleNames = {developer:'Developer',pm:'Product manager',architect:'Architect',qa:'QA engineer',security:'Security'};
 const owners = {Requirements:'pm',Architecture:'architect',Implementation:'developer',Quality:'qa',Security:'security'};
-const navItems = [['overview','Overview'],['knowledge','Shared knowledge'],['tasks','Agent workspace'],['reviews','Change reviews'],['insights','Context insights'],['demo','Demo']];
+const navItems = [['overview','Overview','overview'],['work','Work','tasks'],['knowledge','Knowledge','knowledge'],['inbox','Inbox','reviews']];
+const secondaryItems = [['insights','Activity & usage','insights'],['demo','Walkthroughs','demo']];
+const routeAliases = {tasks:'work',reviews:'inbox'};
+function resolveView(view) {
+  return Object.hasOwn(routeAliases,view) ? routeAliases[view] : ([...navItems,...secondaryItems].some(([id]) => id === view) ? view : 'overview');
+}
+function viewLabel(view) {
+  return [...navItems,...secondaryItems].find(([id]) => id === resolveView(view))[1];
+}
 let state, activeRun, selectedContext, toastTimer, queryFilter = '', domainFilter = 'All domains';
 let currentView = viewFromUrl();
 let busy = false;
 let demoPositions = {}, demoCompleted = {};
 let demoCatalog = [], demoRole = 'all', demoCategory = 'All cases', demoSelected = 'handoff', demoReports = {}, demoRunning = null;
-let identityConfig;
+let identityConfig, protectedVersion = 0;
 
 async function api(path, body) {
   const response = await fetch(`/api/${path}`, {method:body === undefined ? 'GET' : 'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-ContextOS-Client':'workspace'}, ...(body === undefined ? {} : {body:JSON.stringify(body)})});
@@ -44,8 +52,12 @@ function toast(message, error = false) {
   el.className = `visible${error ? ' error' : ''}`; toastTimer = setTimeout(() => el.className = '', 6500);
 }
 async function refresh() {
-  state = await api('workspace');
+  const version = protectedVersion;
+  const next = await api('workspace');
+  if (version !== protectedVersion) return;
+  state = next;
   if (state.auth_mode === 'demo' && !demoCatalog.length) demoCatalog = (await api('demo/scenarios')).scenarios;
+  if (version !== protectedVersion) return;
   document.body.classList.remove('signed-out');
   $('#sign-out').hidden = state.auth_mode !== 'firebase';
   $('#persona').hidden = state.auth_mode !== 'demo';
@@ -86,9 +98,6 @@ function formatTime(value) { return new Date(value).toLocaleTimeString([], {hour
 function eventRows(events) {
   return events.map(e => `<div class="activity"><span class="activity-marker">${e.action.includes('published') ? '✓' : '↗'}</span><div><strong>${esc(e.action)}</strong><p>${esc(e.detail)}</p><small>${esc(e.actor)}${e.role ? ` · ${roleNames[e.role]}` : ''} · ${esc(e.outcome || 'completed')}</small></div><time datetime="${esc(e.at)}">${formatTime(e.at)}</time></div>`).join('');
 }
-function contextRow(c) {
-  return `<button class="context-row" data-action="context" data-id="${esc(c.id)}"><span class="doc-icon">${icon('knowledge')}</span><span class="row-main"><strong>${esc(c.title)}</strong><small>${esc(c.domain)} · ${roleNames[c.owner]}</small></span><span class="version">v${c.revision}</span></button>`;
-}
 function stat(label, value, description, glyph) { return `<div class="stat"><div class="stat-top"><span>${label}</span>${icon(glyph)}</div><div class="stat-value">${value}</div><div class="stat-foot">${description}</div></div>`; }
 function render() {
   if (!state) return;
@@ -103,19 +112,54 @@ function render() {
   if (currentView === 'knowledge' && state.context_pages_enabled) window.contextPages.mount($('#context-pages'), async () => {toast('Proposal created. Open project proposals for independent review.');}, message => showSignIn(message));
   else if (currentView === 'knowledge') $('#search').value = queryFilter;
 }
-function nextActionPanel() {
-  const actions = state.next_actions || [];
-  if (!actions.length) return '';
-  const [primary,...others] = actions;
-  return `<section class="next-action"><div><span class="eyebrow">${roleNames[state.role]} · NEXT ACTION</span><h2>${esc(primary.title)}</h2><p>${esc(primary.reason)}</p></div>${btn(`${esc(primary.label)} ${icon('arrow')}`,'recommended',true,'data-index="0"')}<div class="next-alternatives">${others.map((a,i)=>btn(esc(a.label),'recommended',false,`data-index="${i+1}"`)).join('')}</div></section>`;
+function canReview(proposal) {
+  return proposal.status === 'pending' && state.role === owners[proposal.domain] && state.actor !== proposal.author;
+}
+function affectedRuns() {
+  return state.tasks.filter(t => t.stale && (t.actor ? t.actor === state.actor : t.role === state.role));
+}
+function attentionCount() {
+  return state.proposals.filter(canReview).length + affectedRuns().length;
+}
+function overviewAttention() {
+  const contexts = new Map(state.contexts.map(c => [c.id,c]));
+  const items = affectedRuns().slice().reverse().map(t => {
+    const required = t.manifest.sources.filter(s => contexts.get(s.id)?.mandatory && contexts.get(s.id).revision !== s.revision);
+    return {priority:required.length ? 0 : 2, label:required.length ? 'Critical' : 'Needs review',
+      title:t.query, detail:required.length ? `Required context changed: ${required.map(s => `${s.id} v${s.revision} → v${contexts.get(s.id).revision}`).join(', ')}. Check this work before continuing.` : 'An accepted source or dependency changed after this run.',
+      button:'Inspect run', action:'open-run', attrs:`data-id="${esc(t.id)}"`};
+  });
+  for (const p of state.proposals.filter(p => p.status === 'pending')) {
+    const current = contexts.get(p.context_id);
+    const conflict = current && current.revision !== p.base_revision;
+    if (!canReview(p) && !(conflict && p.author === state.actor)) continue;
+    items.push({priority:1, label:conflict ? 'Conflict' : 'Review', title:p.title,
+      detail:conflict ? `Based on v${p.base_revision}; accepted context is now v${current.revision}. A new proposal is needed.` : `${roleNames[owners[p.domain]]} review requested by ${p.author}.`,
+      button:'View proposal', action:'navigate', attrs:`data-view="inbox" data-filter="${canReview(p) ? 'mine' : 'pending'}"`});
+  }
+  if (state.usage.at(-1)?.status === 'failed') items.push({priority:1, label:'Call failed',
+    title:'Latest model attempt failed', detail:'Check activity and usage before retrying the task.',
+    button:'View activity', action:'navigate', attrs:'data-view="insights"'});
+  return items.sort((a,b) => a.priority - b.priority);
 }
 function overview() {
-  const pending = state.proposals.filter(p=>p.status==='pending');
-  const stale = state.tasks.filter(t=>t.stale);
-  return heading('WORKSPACE',`Ready, ${roleNames[state.role]}?`,'Pick your next move.',btn('Watch a walkthrough','navigate',false,'data-view="demo"'))+
-    nextActionPanel()+
-    `<section class="stats" aria-label="Workspace statistics">${stat('Accepted topics',state.contexts.length,'Current knowledge','knowledge')}${stat('Task runs',state.tasks.length,'Inspect sources','tasks')}${stat('Pending reviews',pending.length,'Owner decisions','reviews')}${stat('Stale runs',stale.length,'Refresh needed','branch')}</section>`+
-    `<div class="grid-2"><section class="panel"><div class="panel-head"><h2>Shared knowledge</h2>${btn('Browse topics','navigate',false,'data-view="knowledge"')}</div>${state.contexts.slice(0,4).map(contextRow).join('')}</section><section class="panel"><div class="panel-head"><h2>Recent actions</h2>${btn('View activity','navigate',false,'data-view="insights"')}</div><div class="panel-body">${eventRows(state.events.slice(0,4))}</div></section></div>`;
+  const items = overviewAttention(), critical = items.filter(item => item.priority === 0).length;
+  const accepted = state.contexts.filter(c => c.status === 'accepted');
+  const pending = state.proposals.filter(p => p.status === 'pending').length;
+  const stale = state.tasks.filter(t => t.stale).length;
+  const required = accepted.filter(c => c.mandatory).length;
+  const status = critical ? `${critical} critical ${critical === 1 ? 'item' : 'items'}` : items.length ? 'Needs attention' : 'No actions flagged';
+  const summary = critical ? 'Required context changed in your earlier work.' : items.length ? `${items.length} ${items.length === 1 ? 'item needs' : 'items need'} your attention.` : accepted.length ? 'Your review queue and recorded runs have no flagged actions.' : 'Start by adding your project’s shared knowledge.';
+  return heading('PROJECT OVERVIEW',esc(state.project.name),'Shared decisions, reviews and work at a glance.',btn('Refresh overview','refresh-overview'))+
+    `<section class="overview-status ${critical ? 'is-critical' : ''}" aria-label="Your attention summary"><div><span class="tag ${critical ? 'critical' : items.length ? 'amber' : ''}">${status}</span><h2>${summary}</h2><p>Showing project information available to you · ${roleNames[state.role]}</p></div><div class="button-group">${btn(`${icon('plus')} Start a task`,'navigate',true,'data-view="work"')}${btn('Browse knowledge','navigate',false,'data-view="knowledge"')}</div></section>`+
+    `<div class="stats">${stat('Accepted topics',accepted.length,'Shared project knowledge','knowledge')}${stat('Pending proposals',pending,'Awaiting independent review','reviews')}${stat('Affected runs',stale,'Visible runs with changed context','branch')}${stat('Required constraints',required,'Included in context assembly','shield')}</div>`+
+    `<div class="grid-2 overview-grid"><section class="panel" aria-labelledby="attention-title"><div class="panel-head"><div><h2 id="attention-title">Needs your attention</h2><p>Changed required context comes first.</p></div><span class="tag">${items.length} ${items.length === 1 ? 'item' : 'items'}</span></div>${items.length ? `<ul class="overview-attention">${items.slice(0,6).map(item => `<li class="overview-attention-item"><div><span class="tag ${item.priority === 0 ? 'critical' : 'amber'}">${item.label}</span><h3>${esc(item.title)}</h3><p>${esc(item.detail)}</p></div>${btn(item.button,item.action,false,item.attrs)}</li>`).join('')}</ul>${items.length > 6 ? `<p class="overview-more">Showing the first 6 of ${items.length} items. Open Inbox for reviews and affected runs.</p>` : ''}` : empty(accepted.length ? 'Nothing needs your attention' : 'No shared knowledge yet',accepted.length ? 'Start a task or explore your team’s accepted decisions.' : 'Add requirements or decisions for an independent owner to review.',accepted.length ? btn('Start a task','navigate',true,'data-view="work"') : btn('Add knowledge','ingest',true),'check')}<div class="panel-bottom">${btn('Open Inbox','navigate',false,'data-view="inbox" data-filter="pending"')}</div></section>`+
+    `<section class="panel" aria-labelledby="recent-activity-title"><div class="panel-head"><div><h2 id="recent-activity-title">Recent activity</h2><p>Latest changes and outcomes you can access.</p></div>${icon('clock')}</div><div class="panel-body">${state.events.length ? eventRows(state.events.slice(0,5)) : empty('No activity yet','Changes and task outcomes will appear here.','','clock')}</div><div class="panel-bottom">${btn('View all activity','navigate',false,'data-view="insights"')}</div></section></div>`;
+}
+function filteredKnowledge() {
+  const query = queryFilter.trim().toLowerCase();
+  return state.contexts.filter(c => (domainFilter === 'All domains' || c.domain === domainFilter)
+    && `${c.id} ${c.title} ${c.body}`.toLowerCase().includes(query));
 }
 function knowledgeResults(list) {
   return (list.length ? `<div class="context-grid">${list.map(c => `<button class="context-card" data-action="context" data-id="${esc(c.id)}"><span class="card-meta"><span class="tag ${c.policy === 'Restricted' ? 'purple' : 'green'}">${esc(c.domain)}</span><span class="version">v${c.revision}</span></span><h3>${esc(c.title)}</h3><p>${esc(c.body)}</p><span class="card-footer"><span>${esc(c.id)} · ${roleNames[c.owner]}</span><span>${c.mandatory ? '● Required' : c.policy === 'Restricted' ? '● Restricted' : '✓ Accepted'}</span></span></button>`).join('')}</div>` : empty('No matching knowledge','Try a broader search or choose another domain.'));
@@ -152,7 +196,7 @@ function demo() {
     `<div class="demo-summary"><span class="tag green">${passed}/${demoCatalog.length} verified</span><span>Isolated rehearsal · Your workspace stays intact</span></div>`+
     `<details class="demo-persona-picker"><summary>Filter by persona${demoRole==='all'?'':` · ${demoPersonas[demoRole].title}`}</summary><div class="demo-section-head"><h2>Choose a perspective</h2><button class="text-btn" data-action="demo-persona" data-role="all" aria-pressed="${demoRole==='all'}">Show all personas</button></div><div class="demo-personas">${personas}</div></details>`+
     `<div class="demo-section-head"><div><h2>Explore the solution</h2><p class="muted">${list.length} cases${demoRole==='all'?' across the team':` involving ${demoPersonas[demoRole].title}`}</p></div><select id="demo-category" aria-label="Demo case category">${['All cases',...new Set(demoCatalog.map(s=>s.category))].map(category=>`<option${category===demoCategory?' selected':''}>${category}</option>`).join('')}</select></div>`+
-    `<div class="demo-workbench"><section class="panel demo-case-list" aria-label="Demo scenarios">${list.length?list.map(s=>`<button class="demo-case ${s.id===demoSelected?'selected':''}" data-action="demo-select" data-id="${s.id}" aria-pressed="${s.id===demoSelected}"><span class="demo-case-label"><span class="tag">${s.category}</span><span class="demo-case-status">${demoReports[s.id] ? (demoReports[s.id].passed?'✓ Passed':'! Needs attention') : 'Not run'}</span></span><strong>${s.title}</strong></button>`).join(''):empty('No cases in this combination','Choose All cases or show all personas.')}</section><section class="panel demo-detail">${selected ? `<div class="form-panel"><div class="eyebrow">${selected.category.toUpperCase()} WALKTHROUGH</div><h2 class="demo-detail-title">${selected.title}</h2><div class="demo-cast">${selected.roles.map(role=>`<span class="tag green">${demoPersonas[role].title}</span>`).join('<span class="muted">→</span>')}</div><div class="button-group">${btn(demoRunning ? 'Running…' : report ? 'Restart walkthrough' : 'Start walkthrough','demo-run',true,`data-id="${selected.id}" ${demoRunning?'disabled':''}`)}${btn('Try in workspace ↗','demo-try',false,`data-id="${selected.id}" ${demoRunning?'disabled':''}`)}</div>${report ? demoStep(selected,report) : `<div class="demo-ready">${icon('branch')}<h3>Follow the decision, step by step.</h3><p>Start, then use Next to reveal each persona’s action.</p></div>`}<p class="form-help">Try in workspace opens ${selected.view} as ${demoPersonas[selected.role].title}.</p></div>` : empty('Choose a case','Select another category to continue.')}</section></div>`+
+    `<div class="demo-workbench"><section class="panel demo-case-list" aria-label="Demo scenarios">${list.length?list.map(s=>`<button class="demo-case ${s.id===demoSelected?'selected':''}" data-action="demo-select" data-id="${s.id}" aria-pressed="${s.id===demoSelected}"><span class="demo-case-label"><span class="tag">${s.category}</span><span class="demo-case-status">${demoReports[s.id] ? (demoReports[s.id].passed?'✓ Passed':'! Needs attention') : 'Not run'}</span></span><strong>${s.title}</strong></button>`).join(''):empty('No cases in this combination','Choose All cases or show all personas.')}</section><section class="panel demo-detail">${selected ? `<div class="form-panel"><div class="eyebrow">${selected.category.toUpperCase()} WALKTHROUGH</div><h2 class="demo-detail-title">${selected.title}</h2><div class="demo-cast">${selected.roles.map(role=>`<span class="tag green">${demoPersonas[role].title}</span>`).join('<span class="muted">→</span>')}</div><div class="button-group">${btn(demoRunning ? 'Running…' : report ? 'Restart walkthrough' : 'Start walkthrough','demo-run',true,`data-id="${selected.id}" ${demoRunning?'disabled':''}`)}${btn('Try in workspace ↗','demo-try',false,`data-id="${selected.id}" ${demoRunning?'disabled':''}`)}</div>${report ? demoStep(selected,report) : `<div class="demo-ready">${icon('branch')}<h3>Follow the decision, step by step.</h3><p>Start, then use Next to reveal each persona’s action.</p></div>`}<p class="form-help">Try in workspace opens ${viewLabel(selected.view)} as ${demoPersonas[selected.role].title}.</p></div>` : empty('Choose a case','Select another category to continue.')}</section></div>`+
     `<details class="panel gap-top demo-limits"><summary>Demo scope & cloud status</summary><div class="panel-head"><div><h2>Coverage</h2><p>Local behavior and cloud readiness are tracked separately.</p></div></div><div class="demo-coverage"><div><span class="tag green">Available locally</span><p>Shared knowledge, note candidates, manual authoring, independent review, exact snapshots, restricted access, conflicts, rollback, dependency alerts and usage transparency.</p></div><div><span class="tag amber">Awaiting cloud setup</span><p>Live Gemini reasoning and extraction, real Firebase accounts, Firestore persistence across instances, and Google Cloud deployment.</p></div><div><span class="tag">Future roadmap</span><p>Semantic search, MCP and IDE access, repository synchronization, automatic knowledge consolidation, and enterprise administration.</p></div></div></details>`;
 }
 function demoStep(scenario, report) {
@@ -190,19 +234,36 @@ async function runDemoCase(id) {
 function runOutput(run) {
   return `<section class="panel result"><div class="form-panel"><div class="result-head"><div><h2>${run.stale ? 'Context has changed' : 'Your task briefing'}</h2><small>${roleNames[run.role]} · ${formatTime(run.created_at)} · ${esc(run.id)}</small></div><span class="tag ${run.stale ? 'amber' : 'green'}">${run.stale ? 'Needs review' : 'Current snapshot'}</span></div>${run.stale ? '<div class="note amber">An accepted dependency changed. This output remains tied to its original sources. Rerun to adopt current knowledge.</div>' : ''}<div class="prose">${esc(run.output)}</div><div class="dialog-actions">${btn('Inspect context','manifest',false,`data-id="${esc(run.id)}"`)}${btn('Rerun with latest context','rerun',false,`data-id="${esc(run.id)}"`)}</div></div></section>`;
 }
-function tasks() {
-  const list = state.tasks.slice().reverse();
-  return heading('AGENT WORKSPACE','What will you work on?',`${roleNames[state.role]} · accepted context included.`)+nextActionPanel()+
-  `<div class="workbench"><div><section class="panel"><form id="task-form" class="form-panel"><div class="result-head"><h2>What are you working on?</h2><span class="tag green">${roleNames[state.role]}</span></div><label class="field" for="task-query">Task goal<textarea id="task-query" name="query" required minlength="3" maxlength="2000" placeholder="Help me implement payment retries without duplicate charges…">${esc(sessionStorage.getItem('task-draft') || '')}</textarea></label><div class="form-row"><label class="field">Context budget<select name="budget"><option value="6000">6,000 estimated tokens</option><option value="3000">3,000 estimated tokens</option><option value="1000">1,000 estimated tokens</option><option value="12000">12,000 estimated tokens</option></select></label><button class="btn primary" type="submit">${icon('spark')} ${state.ai_mode === 'offline' ? 'Run rehearsal' : 'Ask Gemini'}</button></div><p class="form-help">Context-only budget uses conservative byte estimates. System instructions, task text, and output are outside this budget.</p></form></section>${activeRun ? runOutput(activeRun) : ''}</div><aside class="panel"><div class="panel-head"><h2>Task shortcuts</h2>${icon('shield')}</div><div class="panel-body"><div class="task-shortcuts">${btn('Use suggested task','task-suggestion',true)}${btn('Browse accepted topics','navigate',false,'data-view="knowledge"')}${btn('View a walkthrough','navigate',false,'data-view="demo"')}</div><div class="note">${state.ai_mode === 'offline' ? 'Offline: source briefings. Live Gemini setup pending.' : 'Gemini proposes work. People remain responsible for reviewing and publishing decisions.'}</div></div></aside></div>`+
-  `<section class="panel gap-top"><div class="panel-head"><div><h2>Task history</h2><p>Snapshots stay intact when the project evolves.</p></div><span class="tag">${list.length} runs</span></div>${list.length ? list.map(t => `<div class="task-row"><div><strong>${esc(t.query)}</strong><small>${roleNames[t.role]} · ${t.manifest.sources.length} sources · ${formatTime(t.created_at)}</small></div><div class="button-group"><span class="tag ${t.stale ? 'amber' : 'green'}">${t.stale ? 'Needs review' : 'Current'}</span>${btn('Open run','open-run',false,`data-id="${esc(t.id)}"`)}</div></div>`).join('') : empty('Your first informed task starts here','Ask about payment retries, architecture, or acceptance tests.')}</section>`;
+function taskRows(list) {
+  return list.map(t => `<div class="task-row"><div><strong>${esc(t.query)}</strong><small>${roleNames[t.role]} · ${t.manifest.sources.length} sources · ${formatTime(t.created_at)}</small></div><div class="button-group"><span class="tag ${t.stale ? 'amber' : 'green'}">${t.stale ? 'Needs review' : 'Current'}</span>${btn('Open run','open-run',false,`data-id="${esc(t.id)}"`)}</div></div>`).join('');
 }
-function reviews() {
-  const list = [...state.proposals].reverse();
-  return heading('CHANGE REVIEWS','Review a change.','Only independent domain owners can publish.')+
-  (list.length ? list.map(p => {
-    const can = p.status === 'pending' && state.role === owners[p.domain] && state.actor !== p.author;
+function taskSources() {
+  return `<aside class="panel task-sources"><div class="panel-head"><h2>${activeRun ? 'Decisions used' : 'Shared project knowledge'}</h2>${icon('shield')}</div><div class="panel-body">${activeRun ? `<p class="source-intro">${activeRun.stale ? 'Original sources · a newer decision needs review.' : 'These accepted revisions informed this run.'}</p><div class="source-list">${activeRun.manifest.sources.map(s => `<div class="source-item"><strong>${esc(s.title)}</strong><small>${esc(s.id)} · v${s.revision}</small></div>`).join('') || '<p class="muted">No accepted sources were supplied to this run.</p>'}</div>${btn('Inspect exact sources','manifest',false,`data-id="${esc(activeRun.id)}"`)}` : `<p class="source-intro">Your task uses relevant accepted decisions. After a run, inspect the exact sources here.</p>${btn('Browse knowledge','navigate',false,'data-view="knowledge"')}`}</div></aside>`;
+}
+function work() {
+  const list = state.tasks.slice().reverse();
+  const attention = attentionCount();
+  const budget = sessionStorage.getItem('task-budget') || '6000';
+  return heading('WORK','What are you working on?','Start a task with your team’s accepted decisions.')+
+  `<div class="workspace-summary"><span>${roleNames[state.role]} · ${state.contexts.length} accepted topics</span>${attention ? btn(`${attention} items need your attention`,'navigate',false,'data-view="inbox"') : ''}</div>`+
+  `<div class="workbench"><div><section class="panel"><form id="task-form" class="form-panel"><label class="field" for="task-query">Task goal<textarea id="task-query" name="query" required minlength="3" maxlength="2000" placeholder="Describe your task or the decision you need help with…">${esc(sessionStorage.getItem('task-draft') || '')}</textarea></label><details class="task-options"><summary>Advanced options</summary><label class="field">Context budget<select name="budget" id="task-budget">${['6000','3000','1000','12000'].map(value => `<option value="${value}" ${value === budget ? 'selected' : ''}>${Number(value).toLocaleString()} estimated tokens</option>`).join('')}</select></label><p class="form-help">Source-only budget uses conservative byte estimates. Instructions, task text, and output are outside this budget.</p></details><div class="task-actions"><button class="btn primary" type="submit">${icon('spark')} ${state.ai_mode === 'offline' ? 'Run rehearsal' : 'Ask Gemini'}</button><button type="button" class="text-btn" data-action="task-suggestion">Use a suggested task</button></div><p class="form-help">${state.ai_mode === 'offline' ? 'Offline rehearsal · deterministic source briefing.' : 'Gemini drafts work. Shared decisions still require review.'}</p></form></section>${activeRun ? runOutput(activeRun) : ''}</div>${taskSources()}</div>`+
+  `<section class="panel gap-top"><div class="panel-head"><div><h2>Recent work</h2><p>Open a run to inspect its answer and sources.</p></div><span class="tag">${list.length} runs</span></div>${list.length ? taskRows(list) : empty('Your first task starts here','Describe what you need help with above.')}</section>`;
+}
+function inbox() {
+  const pending = state.proposals.filter(p => p.status === 'pending');
+  const mine = pending.filter(canReview);
+  const history = state.proposals.filter(p => p.status !== 'pending');
+  const stale = affectedRuns();
+  const list = [...({pending,mine,history})[inboxFilter]].reverse().sort((a,b) => Number(canReview(b)) - Number(canReview(a)));
+  return heading('INBOX','What needs attention?','Review proposals and revisit work affected by changed decisions.')+
+    (stale.length ? `<section class="panel inbox-alerts"><div class="panel-head"><div><h2>Changed context</h2><p>Your earlier runs still use their original sources. Review before refreshing.</p></div><span class="tag amber">${stale.length} affected</span></div>${taskRows(stale.slice().reverse())}</section>` : '')+
+    `<div class="inbox-heading"><h2>Proposals</h2><div class="button-group inbox-filters" role="group" aria-label="Filter proposals">${[['pending','Pending',pending.length],['mine','For my review',mine.length],['history','History',history.length]].map(([id,label,count]) => btn(`${label} (${count})`,'inbox-filter',inboxFilter === id,`data-filter="${id}" aria-pressed="${inboxFilter === id}"`)).join('')}</div></div>`+reviewCards(list);
+}
+function reviewCards(list) {
+  return (list.length ? list.map(p => {
+    const can = canReview(p);
     return `<details class="panel review-card" id="proposal-${esc(p.id)}" ${p.status === 'pending' ? 'open' : ''}><summary class="review-summary">${esc(p.title)} <span class="tag">${esc(p.status)}</span></summary><div class="review-top"><div><span class="tag ${p.status === 'pending' ? 'amber' : 'green'}">${esc(p.status)}</span><h3>${esc(p.title)}</h3><p>${esc(p.author)} → ${roleNames[owners[p.domain]]} · ${esc(p.context_id || p.published_context_id || 'New context')} ${p.base_revision ? `· Based on v${p.base_revision}` : ''}</p></div><span class="tag">${esc(p.domain)}</span></div><p class="muted">${esc(p.reason)}</p><div class="diff gap-top"><div class="diff-pane"><strong>ACCEPTED BASE ${p.base_revision ? `· V${p.base_revision}` : ''}</strong><pre>${esc(p.before || 'New topic — no accepted version yet.')}</pre></div><div class="diff-pane after"><strong>PROPOSED CHANGE</strong><pre>${esc(p.body)}</pre></div></div><div class="review-actions"><p>${p.status !== 'pending' ? `Reviewed by ${esc(p.reviewer)}` : can ? 'Your approval publishes exactly this proposal.' : state.actor === p.author ? 'Independent review required; the author cannot self-approve.' : `Awaiting an independent ${roleNames[owners[p.domain]]} reviewer.`}</p>${can ? btn('Reject','reject',false,`data-id="${esc(p.id)}"`)+btn(`${icon('check')} Approve & publish`,'approve',true,`data-id="${esc(p.id)}"`) : ''}</div></details>`;
-  }).join('') : `<section class="panel">${empty('No changes waiting for review','Open a knowledge item and propose an update. Its owner can review the exact change.',btn('Explore shared knowledge','navigate',false,'data-view="knowledge"'),'reviews')}</section>`);
+  }).join('') : `<section class="panel">${empty('No proposals in this view','Browse shared knowledge to propose a change, or choose another filter.',btn('Browse knowledge','navigate',false,'data-view="knowledge"'),'reviews')}</section>`);
 }
 function insights() {
   const liveUsage = state.usage.filter(u => u.provider && u.provider !== 'offline');
@@ -239,7 +300,7 @@ async function manifest(id) {
 }
 async function runTask(query,budget) {
   const run = await api('tasks',{query,budget}); activeRun = run;
-  await refresh(); go('tasks'); toast('Task saved with its source manifest.');
+  await refresh(); go('work'); toast('Task saved with its source manifest.');
 }
 function addKnowledge() {
   modal('Bring knowledge into the workspace','Extract a candidate from notes or write a topic directly. Both require review.',
@@ -250,11 +311,14 @@ function addKnowledge() {
 function clearProtectedView() {
   window.contextPages.clear();
   state = undefined; activeRun = undefined; selectedContext = undefined;
-  queryFilter = ''; domainFilter = 'All domains';
+  queryFilter = ''; domainFilter = 'All domains'; inboxFilter = 'pending';
   demoCatalog = []; demoReports = {}; demoPositions = {}; demoCompleted = {};
   sessionStorage.removeItem('task-draft');
+  sessionStorage.removeItem('task-budget');
   $('#dialog').close(); $('#dialog-content').replaceChildren();
   $('#main').replaceChildren(); $('#nav').replaceChildren();
+  $('#secondary-nav').replaceChildren();
+  $('#mobile-tools').replaceChildren(); $('#workspace-tools').open = false;
   $('#project-name').textContent = ''; $('#profile-label').textContent = '';
   $('#sign-out').hidden = true;
 }
@@ -279,6 +343,7 @@ async function bootstrapIdentity() {
 async function action(el) {
   const a = el.dataset.action, id = el.dataset.id;
   if (a === 'retry-sign-in') return bootstrapIdentity();
+  if (a === 'refresh-overview') return refresh();
   if (a === 'sign-out') {
     await window.contextosIdentity.signOut();
     showSignIn('You signed out of this browser.');
@@ -286,24 +351,11 @@ async function action(el) {
   }
   if (a === 'task-suggestion') {
     const suggestion = state.next_actions.find(x=>x.kind==='task');
-    sessionStorage.setItem('task-draft',suggestion.query); go('tasks');
+    sessionStorage.setItem('task-draft',suggestion.query); go('work');
     requestAnimationFrame(()=>$('#task-query')?.focus()); return;
   }
-  if (a === 'recommended') {
-    const suggestion = state.next_actions[Number(el.dataset.index)];
-    if (!suggestion) return;
-    if (suggestion.kind === 'task') {
-      sessionStorage.setItem('task-draft',suggestion.query); go('tasks');
-      requestAnimationFrame(()=>$('#task-query')?.focus());
-    } else if (suggestion.kind === 'create') addKnowledge();
-    else if (suggestion.kind === 'review') {
-      go('reviews');
-      // Navigation renders on hashchange; focus after the route renders.
-      requestAnimationFrame(()=>document.getElementById(`proposal-${suggestion.id}`)?.scrollIntoView({block:'start'}));
-    } else if (suggestion.kind === 'rerun') {
-      activeRun = state.tasks.find(t=>t.id===suggestion.id); go('tasks');
-    }
-    return;
+  if (a === 'inbox-filter' && ['pending','mine','history'].includes(el.dataset.filter)) {
+    inboxFilter = el.dataset.filter; render(); return;
   }
   if (['demo-next','demo-back','demo-finish'].includes(a)) {
     const report = demoReports[id];
@@ -327,20 +379,23 @@ async function action(el) {
   if (a === 'demo-try') {
     const scenario = demoCatalog.find(s=>s.id===id);
     await api('persona',{role:scenario.role});
-    activeRun = undefined; selectedContext = undefined; queryFilter = ''; domainFilter = 'All domains';
+    activeRun = undefined; selectedContext = undefined; queryFilter = ''; domainFilter = 'All domains'; inboxFilter = 'pending';
     sessionStorage.setItem('task-draft',scenario.query);
     await refresh(); go(scenario.view);
     if (id === 'manual' || id === 'ingestion') {addKnowledge(); if (id==='manual') await action(document.querySelector('[data-action="knowledge-mode"][data-mode="manual"]'));}
     toast(`Ready to explore as ${demoPersonas[scenario.role].title}.`);
     return;
   }
-  if (a === 'navigate') {if (el.dataset.view==='insights') await refresh(); return go(el.dataset.view);}
+  if (a === 'navigate') {
+    if (el.dataset.view === 'inbox' && ['pending','mine','history'].includes(el.dataset.filter)) inboxFilter = el.dataset.filter;
+    return go(el.dataset.view);
+  }
   if (a === 'close') return $('#dialog').close();
   if (a === 'context') return openContext(id);
   if (a === 'edit') return editContext();
   if (a === 'restore') {const h = selectedContext.history.find(x => x.revision === Number(el.dataset.revision)); return editContext(h.body,`Restore content from v${h.revision}; preserve all subsequent revision history.`);}
   if (a === 'manifest') return manifest(id);
-  if (a === 'open-run') {activeRun = state.tasks.find(t => t.id === id); go('tasks'); window.scrollTo({top:0,behavior:'smooth'}); return;}
+  if (a === 'open-run') {activeRun = state.tasks.find(t => t.id === id); go('work'); window.scrollTo({top:0,behavior:'smooth'}); return;}
   if (a === 'ingest') return addKnowledge();
   if (a === 'knowledge-mode') {
     const manual = el.dataset.mode === 'manual';
@@ -376,9 +431,9 @@ document.addEventListener('submit', async e => {
   const data = Object.fromEntries(new FormData(form));
   try {
     if (form.id === 'task-form') {sessionStorage.setItem('task-draft',data.query); await runTask(data.query,Number(data.budget));}
-    if (form.id === 'proposal-form') {await api('proposals',{context_id:selectedContext.id,base_revision:selectedContext.revision,body:data.body,reason:data.reason,sources:selectedContext.sources}); $('#dialog').close(); await refresh(); go('reviews'); toast('Change proposed. The accepted revision is unchanged.');}
-    if (form.id === 'manual-proposal-form') {const {source,...proposal} = data; await api('proposals',{...proposal,sources:[source]}); $('#dialog').close(); await refresh(); go('reviews'); toast('Manual proposal created. Independent owner review is required.');}
-    if (form.id === 'ingest-form') {await api('ingest',data); $('#dialog').close(); await refresh(); go('reviews'); toast('Review candidate created.');}
+    if (form.id === 'proposal-form') {await api('proposals',{context_id:selectedContext.id,base_revision:selectedContext.revision,body:data.body,reason:data.reason,sources:selectedContext.sources}); $('#dialog').close(); inboxFilter = 'pending'; await refresh(); go('inbox'); toast('Change proposed. The accepted revision is unchanged.');}
+    if (form.id === 'manual-proposal-form') {const {source,...proposal} = data; await api('proposals',{...proposal,sources:[source]}); $('#dialog').close(); inboxFilter = 'pending'; await refresh(); go('inbox'); toast('Manual proposal created. Independent owner review is required.');}
+    if (form.id === 'ingest-form') {await api('ingest',data); $('#dialog').close(); inboxFilter = 'pending'; await refresh(); go('inbox'); toast('Review candidate created.');}
     if (form.id === 'login-form') {
       form.elements.password.value = '';
       await window.contextosIdentity.signIn(data.email,data.password);
@@ -390,15 +445,16 @@ document.addEventListener('submit', async e => {
 $('#persona').addEventListener('change',async e => {
   if (busy) {e.target.value = state.role; return;}
   busy = true; e.target.disabled = true;
-  try {await api('persona',{role:e.target.value}); activeRun = undefined; selectedContext = undefined; $('#dialog').close(); await refresh(); toast(`Viewing as ${roleNames[state.role]}. Permissions applied.`);} catch(err) {e.target.value = state.role; toast(err.message,true);} finally {busy = false; e.target.disabled = state?.auth_mode !== 'demo';}
+  try {await api('persona',{role:e.target.value}); activeRun = undefined; selectedContext = undefined; inboxFilter = 'pending'; $('#dialog').close(); await refresh(); toast(`Viewing as ${roleNames[state.role]}. Permissions applied.`);} catch(err) {e.target.value = state.role; toast(err.message,true);} finally {busy = false; e.target.disabled = state?.auth_mode !== 'demo';}
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'search' && !e.isComposing) {queryFilter = e.target.value; updateKnowledgeResults();}
+  if (e.target.id === 'task-query') sessionStorage.setItem('task-draft',e.target.value);
 });
 document.addEventListener('compositionend', e => {
   if (e.target.id === 'search') {queryFilter = e.target.value; updateKnowledgeResults();}
 });
-document.addEventListener('change',e => {if (e.target.id === 'demo-category') {demoCategory = e.target.value; render();} if (e.target.id === 'domain-filter') {domainFilter = e.target.value; updateKnowledgeResults();}});
+document.addEventListener('change',e => {if (e.target.id === 'demo-category') {demoCategory = e.target.value; render();} if (e.target.id === 'domain-filter') {domainFilter = e.target.value; updateKnowledgeResults();} if (e.target.id === 'task-budget') sessionStorage.setItem('task-budget',e.target.value);});
 $('#dialog').addEventListener('click', e => {
   const dialog = $('#dialog');
   if (e.target !== dialog || busy) return;

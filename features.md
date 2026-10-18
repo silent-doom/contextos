@@ -37,6 +37,8 @@ F11 now reveals a single checkpoint at a time with Next/Back, actor attribution 
 
 Visual refinement: restored palette/typography from 4e1bd51 per clarified user direction; current F11/F13 workflows remain intact.
 
+18 October visual refinement: user selected royal-blue navigation/buttons/accents with an off-white canvas and white cards. Palette and favicon updated; existing typography and F11/F13 workflows retained. This supersedes earlier palette directions.
+
 ## Person 3 delivery backlog — 18 October 2026
 
 Full candidate features, priorities and verification: [PERSON3_DELIVERY.md](PERSON3_DELIVERY.md). These are proposed scope, not implemented features.
@@ -49,7 +51,7 @@ Full candidate features, priorities and verification: [PERSON3_DELIVERY.md](PERS
 | P3-04 | Dashboard/context/editor completion | P0 | Existing screens need authenticated states and recovery checks |
 | P3-05 | Dedicated relationship explorer | P1 | Dependency buttons only |
 | P3-06 | Review queue completion | P0 | Existing governance; add filters and reconciliation UX |
-| P3-07 | Persisted task chat | P1 | Current runs are standalone |
+| P3-07 | Persisted task chat | P1 | Backend complete locally; Work chat UI remains open |
 | P3-08 | Activity destination and per-turn inspector | P0 | Existing audit/inspector; add filters and conversation selection |
 | P3-09 | Staging hosting/CI promotion/secrets/rollback | P0 | Configured local package; live evidence open |
 | P3-10 | Readiness/logging/monitoring | P0 | Basic health and domain audit; operational controls missing |
@@ -62,3 +64,22 @@ P3-01/02 backend slice: session exchange/config/logout and verified cookie ident
 P3-01/02 UI slice: normal email/password login/logout, session recovery, hidden persona switching and protected-buffer cleanup implemented. 50 Python + 4 Node tests pass; live provider-account verification remains open.
 
 P3-03 configuration slice: authenticated workspaces start empty; Firestore selection validates project/config, Cloud Run refuses SQLite. Firestore rules/index config and explicit concurrency verification script prepared. Five new tests pass; no live Firestore durability/restore claim.
+
+P3 release-verification slice: `scripts/verify_collaboration.py` exercises two independent Firebase session exchanges, shared decisions, owner review, publication audit, immutable v1/v2 task snapshots, stale warnings, fresh-session history and logout through the API. Ten local regression cases use mocked Firebase and offline AI. Live staging execution and cloud setup remain pending.
+
+P3 workspace slice: Work/Knowledge/Inbox replace six primary navigation entries. Work has one task form, advanced budget controls, draft recovery and original source revisions. Inbox includes scoped attention, affected runs and Pending/My review/History filters; Activity & usage and Walkthroughs remain secondary. Legacy links/demo entry points resolve to current destinations. Seven Node controller regressions pass, including late-response cleanup; visual browser verification remains pending. Standalone runs remain distinct from future multi-turn conversations.
+
+P3-S07 conversation backend: private saved conversations and follow-up turns now
+have exact manifests/history references, pending/succeeded/failed states,
+idempotent retries with attempt fencing, explicit stale-context refresh and
+permission-filtered activity/exports. Seventeen conversation tests and two model
+contract tests added; total 85 Python + 11 Node tests. Existing task API remains
+compatible. Work still uses standalone runs; P3-S08 chat UI and live checks remain
+open. See design/specs/conversations.md for bounds and recovery behavior.
+
+Overview restoration: Overview is again the first tab and default landing page,
+alongside Work/Knowledge/Inbox. Accessible project counts, recent activity and
+scoped personal actions show changed required constraints as Critical, independent
+reviews, proposal/base conflicts and affected work, with source/review links and
+refresh. No backend or policy changes. 85 Python + 16 Node tests pass; new visual
+browser QA remains unavailable. This supersedes the Overview-to-Work redirect.

@@ -77,6 +77,37 @@ A live provider test account, correct project ID and working ADC are still neede
 
 ## Deployment acceptance checks
 
+### Repeatable two-user API verification
+
+Run `scripts/verify_collaboration.py` against a dedicated staging workspace after
+accounts and the service are configured. It exchanges two recent Firebase ID
+tokens for independent browser-style sessions, then verifies shared proposals,
+denied author approval, independent publication/audit, exact task snapshots,
+source-change warnings, reruns, fresh-session persistence and logout.
+
+Use a Developer author and a different Architect reviewer with the same trusted
+workspace claim. Supply `CONTEXTOS_AUTHOR_ID_TOKEN` and
+`CONTEXTOS_REVIEWER_ID_TOKEN` through a secure local environment mechanism; tokens
+must come from a sign-in within the previous five minutes. Do not place them in
+command arguments, shell history, source, screenshots or chat.
+
+```sh
+.venv/bin/python scripts/verify_collaboration.py --base-url https://YOUR-STAGING-ORIGIN
+```
+
+This creates a uniquely named synthetic Architecture topic, two proposals and
+two task runs, all retained for inspection. Live mode makes two model calls and
+can incur charges. Use a separate staging workspace with room within the normal
+storage/call limits. The command prints only generated IDs, revision and mode,
+not tokens, source bodies or model output; failures return a nonzero exit code.
+
+HTTPS is required except for loopback HTTP. Demo authentication is always
+rejected. `--allow-offline` explicitly permits an offline rehearsal with Firebase
+authentication and labels its evidence accordingly. Local regression tests mock
+Firebase and use SQLite; they are not live verification. The verifier does not
+test the password screen, redeployment durability, Firestore concurrency, backups
+or judge access; those remain separate acceptance gates below.
+
 - [ ] Container builds on Linux and runs as non-root.
 - [ ] `/api/health` reports intended AI/auth modes.
 - [ ] Live extraction and task calls succeed; real usage recorded.

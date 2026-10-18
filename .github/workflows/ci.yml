@@ -44,7 +44,7 @@ jobs:
         run: |
           node --check web/app.js
           node --check web/auth.js
-          node --test tests/browser_auth.test.cjs
+          node --test tests/browser_*.test.cjs
       - name: Rehearse the governed workflow
         run: python scripts/rehearsal.py
 
